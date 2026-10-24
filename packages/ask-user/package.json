@@ -1,0 +1,17 @@
+{
+  "name": "ask-user",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "effect": "^4.0.6"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "^0.24.2",
+    "typebox": "^1.4.3"
+  }
+}
