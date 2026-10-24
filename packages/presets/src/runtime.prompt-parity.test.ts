@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, mock, test } from "bun:test";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const installRoot = resolve(
   process.env.PI_MANAGED_INSTALL_ROOT ?? join(homedir(), ".pi", "agent", "install"),
@@ -25,9 +26,7 @@ if (packageJson.version !== version) {
     `Pi install version mismatch: current-version says ${version}, package is ${packageJson.version}`,
   );
 }
-const piConfig = await import(
-  pathToFileURL(join(packageDir, "dist", "config.js")).href
-);
+const piConfig = await import(pathToFileURL(join(packageDir, "dist", "config.js")).href);
 
 // This extension is loaded by Pi, but its standalone test has no local Pi dependency.
 mock.module("@earendil-works/pi-ai", () => ({
@@ -86,7 +85,7 @@ function applyBasePrompt(
   applyProfile(
     { name: "parity-test", definition: { body: "", prompt } },
     options,
-    { ui: { notify() {} } },
+    { ui: { notify() {} } } as unknown as ExtensionContext,
     new Set(),
   );
   return options;
@@ -101,27 +100,27 @@ function sectionBody(name: string, section: string | undefined): string {
 }
 
 const parityCases: Array<[string, PromptInput]> = [
-	["Pi's default tool loadout", {}],
-	[
-		"hidden tools, snippets, and deduplicated guidelines",
-		{
-			selectedTools: ["bash", "read", "custom"],
-			hiddenTools: ["read"],
-			toolSnippets: {
-				bash: "Run shell commands",
-				read: "Read files",
-				custom: "Do custom work",
-			},
-			toolGuidelines: { bash: ["Keep commands safe", " Keep commands safe "] },
-			promptGuidelines: ["Keep commands safe", "Prefer small changes"],
-		},
-	],
-	["PowerShell-only loadout", { selectedTools: ["powershell"] }],
-	["bash and PowerShell loadout", { selectedTools: ["bash", "powershell"] }],
-	[
-		"native file tools suppressing the shell rule",
-		{ selectedTools: ["bash", "grep", "find", "ls"] },
-	],
+  ["Pi's default tool loadout", {}],
+  [
+    "hidden tools, snippets, and deduplicated guidelines",
+    {
+      selectedTools: ["bash", "read", "custom"],
+      hiddenTools: ["read"],
+      toolSnippets: {
+        bash: "Run shell commands",
+        read: "Read files",
+        custom: "Do custom work",
+      },
+      toolGuidelines: { bash: ["Keep commands safe", " Keep commands safe "] },
+      promptGuidelines: ["Keep commands safe", "Prefer small changes"],
+    },
+  ],
+  ["PowerShell-only loadout", { selectedTools: ["powershell"] }],
+  ["bash and PowerShell loadout", { selectedTools: ["bash", "powershell"] }],
+  [
+    "native file tools suppressing the shell rule",
+    { selectedTools: ["bash", "grep", "find", "ls"] },
+  ],
 ];
 
 describe(`Pi ${version} system-prompt parity`, () => {

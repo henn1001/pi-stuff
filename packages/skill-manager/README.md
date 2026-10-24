@@ -7,8 +7,8 @@ A focused local Pi extension for controlling whether the model can discover and 
 Pi interprets the frontmatter field as follows:
 
 ```yaml
-disable-model-invocation: true   # hidden from the model; /skill:name still works
-disable-model-invocation: false  # visible to the model
+disable-model-invocation: true # hidden from the model; /skill:name still works
+disable-model-invocation: false # visible to the model
 ```
 
 This extension always writes an explicit `true` or `false`. It preserves the rest of the Markdown source, including comments, body text, LF/CRLF style, and final-newline state. Writes to the same file are serialized and validated before and after mutation.
@@ -17,30 +17,30 @@ Only skills already loaded by Pi are shown. Project, global/user, package, and t
 
 ## Commands
 
-| Command | Action |
-| --- | --- |
-| `/skill` | Open the TUI browser. |
-| `/skill list` | List loaded skills with state, scope, and path. |
-| `/skill status <name-or-path>` | Show one skill's model-invocation state. |
-| `/skill enable <name-or-path>` | Write `disable-model-invocation: false`. |
-| `/skill disable <name-or-path>` | Write `disable-model-invocation: true`. |
-| `/skill:<name>` | Invoke a skill explicitly using Pi's native command. |
+| Command                         | Action                                               |
+| ------------------------------- | ---------------------------------------------------- |
+| `/skill`                        | Open the TUI browser.                                |
+| `/skill list`                   | List loaded skills with state, scope, and path.      |
+| `/skill status <name-or-path>`  | Show one skill's model-invocation state.             |
+| `/skill enable <name-or-path>`  | Write `disable-model-invocation: false`.             |
+| `/skill disable <name-or-path>` | Write `disable-model-invocation: true`.              |
+| `/skill:<name>`                 | Invoke a skill explicitly using Pi's native command. |
 
 Names must be unique for `status`, `enable`, and `disable`. If multiple loaded skills have the same name, the command fails and reports their paths; rerun it with one exact path. No command mutates multiple matching skills.
 
 `/skill` opens a full-terminal browser with a searchable skill list (~25%) and the selected skill's rendered frontmatter and Markdown (~75%). Details follow selection automatically. Below 100 columns, only the focused pane is shown; Tab switches panes. Pane widths and viewports adapt when the terminal is resized.
 
-| Key | Action |
-| --- | --- |
-| Type (list focused) | Filter loaded skills. |
-| Up/Down | Select a skill in the list; scroll when detail is focused. |
-| `-`/`=` or PageUp/PageDown | Page through the focused pane. |
-| Home/End (detail focused) | Jump to the start/end of the skill content. |
+| Key                              | Action                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| Type (list focused)              | Filter loaded skills.                                                                 |
+| Up/Down                          | Select a skill in the list; scroll when detail is focused.                            |
+| `-`/`=` or PageUp/PageDown       | Page through the focused pane.                                                        |
+| Home/End (detail focused)        | Jump to the start/end of the skill content.                                           |
 | Mouse wheel (Pi fullscreen mode) | Scroll detail or move list selection under the pointer, regardless of keyboard focus. |
-| Tab | Switch keyboard focus between list and detail. |
-| Ctrl+X or Alt+X | Toggle the selected skill's model visibility from either pane. |
-| Enter | Insert the native `/skill:<name>` command and close. |
-| Escape | Return from detail to list; clear a search in the list; otherwise close. |
+| Tab                              | Switch keyboard focus between list and detail.                                        |
+| Ctrl+X or Alt+X                  | Toggle the selected skill's model visibility from either pane.                        |
+| Enter                            | Insert the native `/skill:<name>` command and close.                                  |
+| Escape                           | Return from detail to list; clear a search in the list; otherwise close.              |
 
 List badges use `V` for model-visible and `M` for manual-only, followed by the skill's scope. The manager intentionally has no create, edit, rename, or delete modes.
 
