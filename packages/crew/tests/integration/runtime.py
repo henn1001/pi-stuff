@@ -213,7 +213,7 @@ class Runtime:
         if not self.lead_pane_id:
             raise IntegrationError("Create the workspace before starting the lead.")
         self.lead_name = name
-        extension = self.root / "src" / "index.ts"
+        extension = self.root / "index.ts"
         observer = self.root / "tests" / "integration" / "fixtures" / "observer.ts"
         provider = self.root / "tests" / "integration" / "fixtures" / "provider.ts"
         args = [

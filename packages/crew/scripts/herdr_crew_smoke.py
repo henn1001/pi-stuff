@@ -11,7 +11,7 @@ from pathlib import Path
 from herdr_scenario import HerdrScenario, ScenarioError
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION = ROOT / "src" / "index.ts"
+EXTENSION = ROOT / "index.ts"
 
 
 def run_scenario(scenario: HerdrScenario) -> None:
@@ -82,12 +82,8 @@ def run_scenario(scenario: HerdrScenario) -> None:
         ],
         timeout=scenario.timeout_seconds + 30,
     )
-    scenario.wait_for_agent_text(
-        worker_pane, worker_token, timeout=scenario.timeout_seconds
-    )
-    scenario.wait_for_agent_text(
-        scout_pane, scout_token, timeout=scenario.timeout_seconds
-    )
+    scenario.wait_for_agent_text(worker_pane, worker_token, timeout=scenario.timeout_seconds)
+    scenario.wait_for_agent_text(scout_pane, scout_token, timeout=scenario.timeout_seconds)
     scenario.require(
         scenario.agent_present(worker_pane),
         "Interactive worker exited; expected it to remain connected.",
@@ -96,9 +92,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
         scenario.agent_present(scout_pane),
         "Interactive scout exited; expected it to remain connected.",
     )
-    print(
-        "PASS: lead messaged both interactive agents; both returned poems and remain connected."
-    )
+    print("PASS: lead messaged both interactive agents; both returned poems and remain connected.")
 
     once_request = (
         f'Call spawn_agent exactly once with task_name "{task_name}", agent_type "{once_name}", '
@@ -106,9 +100,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
         "result, repeat that result exactly. Do not use other tools."
     )
     scenario.command(["herdr", "agent", "prompt", lead_name, once_request])
-    scenario.wait_for_agent_text(
-        lead_name, once_token, timeout=scenario.timeout_seconds, lines=200
-    )
+    scenario.wait_for_agent_text(lead_name, once_token, timeout=scenario.timeout_seconds, lines=200)
     once_pane = scenario.agent_pane(once_name)
     if once_pane:
         scenario.wait_for(

@@ -132,7 +132,7 @@ export async function buildLaunch(spec: LaunchSpec): Promise<BuiltLaunch> {
   const argv = [
     "pi",
     "--extension",
-    fileURLToPath(new URL("../index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../index.ts", import.meta.url)),
     "--provider",
     model.provider,
     "--model",

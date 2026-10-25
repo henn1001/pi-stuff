@@ -11,7 +11,7 @@ from pathlib import Path
 from herdr_scenario import HerdrScenario, ScenarioError
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION = ROOT / "src" / "index.ts"
+EXTENSION = ROOT / "index.ts"
 
 
 def run_scenario(scenario: HerdrScenario) -> None:
@@ -61,24 +61,16 @@ def run_scenario(scenario: HerdrScenario) -> None:
         ],
         timeout=scenario.timeout_seconds + 30,
     )
-    scenario.wait_for_agent_text(
-        worker_pane, first_token, timeout=scenario.timeout_seconds
-    )
-    scenario.wait_for_agent_text(
-        first_lead, first_token, timeout=scenario.timeout_seconds
-    )
+    scenario.wait_for_agent_text(worker_pane, first_token, timeout=scenario.timeout_seconds)
+    scenario.wait_for_agent_text(first_lead, first_token, timeout=scenario.timeout_seconds)
     scenario.require(
         scenario.agent_present(worker_pane),
         "Interactive worker exited before lead succession.",
     )
-    print(
-        "PASS: the interactive worker received the request and returned its poem to the first lead."
-    )
+    print("PASS: the interactive worker received the request and returned its poem to the first lead.")
 
     if not scenario.lead_pane_id or not scenario.workspace_id:
-        raise ScenarioError(
-            "The first lead workspace is missing its pane or workspace ID."
-        )
+        raise ScenarioError("The first lead workspace is missing its pane or workspace ID.")
 
     scenario.command(["herdr", "agent", "send-keys", first_lead, "ctrl+c", "ctrl+c"])
     scenario.wait_for(
@@ -87,9 +79,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
         timeout=30,
     )
 
-    scenario.command(
-        ["herdr", "pane", "rename", scenario.lead_pane_id, f"crew-pending-{successor}"]
-    )
+    scenario.command(["herdr", "pane", "rename", scenario.lead_pane_id, f"crew-pending-{successor}"])
     scenario.command(
         [
             "herdr",
@@ -118,8 +108,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
             (
                 pane
                 for pane in scenario.pane_list()
-                if pane.get("pane_id") == scenario.lead_pane_id
-                and pane.get("label") == "lead"
+                if pane.get("pane_id") == scenario.lead_pane_id and pane.get("label") == "lead"
             ),
             None,
         ),
@@ -146,19 +135,13 @@ def run_scenario(scenario: HerdrScenario) -> None:
         ],
         timeout=scenario.timeout_seconds + 30,
     )
-    scenario.wait_for_agent_text(
-        worker_pane, successor_token, timeout=scenario.timeout_seconds
-    )
-    scenario.wait_for_agent_text(
-        successor, successor_token, timeout=scenario.timeout_seconds
-    )
+    scenario.wait_for_agent_text(worker_pane, successor_token, timeout=scenario.timeout_seconds)
+    scenario.wait_for_agent_text(successor, successor_token, timeout=scenario.timeout_seconds)
     scenario.require(
         scenario.agent_present(worker_pane),
         "Interactive worker exited during lead succession.",
     )
-    print(
-        "PASS: a fresh Pi lead recovered the existing worker and received its follow-up poem."
-    )
+    print("PASS: a fresh Pi lead recovered the existing worker and received its follow-up poem.")
     print(
         f"Herdr workspace left open: {scenario.workspace_id} "
         f"(tab {scenario.tab_id}; first lead {first_lead}; successor {successor}; worker {worker_pane})."

@@ -12,7 +12,7 @@ from pathlib import Path
 from herdr_scenario import HerdrScenario, ScenarioError
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION = ROOT / "src" / "index.ts"
+EXTENSION = ROOT / "index.ts"
 
 
 def wait_for_generated_marker(
@@ -97,12 +97,8 @@ def run_scenario(scenario: HerdrScenario) -> None:
         ],
         timeout=scenario.timeout_seconds + 30,
     )
-    first_marker = wait_for_generated_marker(
-        scenario, worker_pane, first_prefix, timeout=scenario.timeout_seconds
-    )
-    scenario.wait_for_agent_text(
-        first_lead, first_marker, timeout=scenario.timeout_seconds, lines=200
-    )
+    first_marker = wait_for_generated_marker(scenario, worker_pane, first_prefix, timeout=scenario.timeout_seconds)
+    scenario.wait_for_agent_text(first_lead, first_marker, timeout=scenario.timeout_seconds, lines=200)
     print("PASS: the worker generated and returned its first poem to the lead.")
 
     scenario.command(["herdr", "agent", "send-keys", worker_pane, "ctrl+c", "ctrl+c"])
@@ -132,9 +128,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
         ],
         timeout=scenario.timeout_seconds + 30,
     )
-    resumed_worker_pane = scenario.wait_for_agent_pane(
-        worker, timeout=scenario.timeout_seconds
-    )
+    resumed_worker_pane = scenario.wait_for_agent_pane(worker, timeout=scenario.timeout_seconds)
     second_marker = wait_for_generated_marker(
         scenario, resumed_worker_pane, second_prefix, timeout=scenario.timeout_seconds
     )
@@ -142,9 +136,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
         scenario.agent_present(resumed_worker_pane),
         "The worker did not remain connected after receiving its queued poem request.",
     )
-    print(
-        "PASS: the queued request resumed the worker and was delivered after it connected."
-    )
+    print("PASS: the queued request resumed the worker and was delivered after it connected.")
 
     if not scenario.lead_pane_id or not scenario.workspace_id:
         raise ScenarioError("The lead workspace is missing its pane or workspace ID.")
@@ -188,9 +180,7 @@ def run_scenario(scenario: HerdrScenario) -> None:
     )
     print("PASS: the worker accepted its upward message while the lead was offline.")
 
-    scenario.command(
-        ["herdr", "pane", "rename", scenario.lead_pane_id, f"crew-pending-{successor}"]
-    )
+    scenario.command(["herdr", "pane", "rename", scenario.lead_pane_id, f"crew-pending-{successor}"])
     scenario.command(
         [
             "herdr",
@@ -219,20 +209,15 @@ def run_scenario(scenario: HerdrScenario) -> None:
             (
                 pane
                 for pane in scenario.pane_list()
-                if pane.get("pane_id") == scenario.lead_pane_id
-                and pane.get("label") == "lead"
+                if pane.get("pane_id") == scenario.lead_pane_id and pane.get("label") == "lead"
             ),
             None,
         ),
         timeout=30,
     )
     scenario.lead_name = successor
-    scenario.wait_for_agent_text(
-        successor, second_marker, timeout=scenario.timeout_seconds, lines=240
-    )
-    print(
-        "PASS: the successor lead received the worker's message queued during the outage."
-    )
+    scenario.wait_for_agent_text(successor, second_marker, timeout=scenario.timeout_seconds, lines=240)
+    print("PASS: the successor lead received the worker's message queued during the outage.")
     print(
         f"Herdr workspace left open: {scenario.workspace_id} "
         f"(tab {scenario.tab_id}; first lead {first_lead}; successor {successor}; "
