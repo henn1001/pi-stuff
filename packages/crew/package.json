@@ -8,9 +8,9 @@
   "scripts": {
     "test": "CREW_VALIDATION_TMP=\"$PWD\" node --test tests/integration/*.test.mjs",
     "test:runtime": "python3 tests/integration/run.py",
-    "format": "node ./node_modules/oxfmt/bin/oxfmt src package.json .oxfmtrc.json .oxlintrc.json",
-    "format:check": "node ./node_modules/oxfmt/bin/oxfmt --check src package.json .oxfmtrc.json .oxlintrc.json",
-    "lint": "node ./node_modules/oxlint/bin/oxlint src"
+    "format": "oxfmt src package.json .oxfmtrc.json .oxlintrc.json",
+    "format:check": "oxfmt --check src package.json .oxfmtrc.json .oxlintrc.json",
+    "lint": "oxlint src"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

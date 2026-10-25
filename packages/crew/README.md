@@ -1,13 +1,13 @@
 # Crew
 
-Crew is a private pi extension for coordinating helper sessions in herdr. Enable it in a lead session, then delegate work to agents running in separate panes or start idle agents yourself.
+Crew is a pi extension for coordinating helper sessions in herdr. Enable it in a lead session, then delegate work to agents running in separate panes or start idle agents yourself.
 
 ## Requirements
 
 - pi with this extension loaded
 - A herdr-managed workspace and the `herdr` CLI
 
-The extension is registered from `src/index.ts`. It requires herdr for pane management and inter-session messaging.
+The extension is registered from `index.ts`. It requires herdr for pane management and inter-session messaging.
 
 ## Quick start
 

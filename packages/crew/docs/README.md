@@ -12,3 +12,4 @@ These documents contain the accepted requirements for Crew's next iteration. Dra
 | [Tools](tool-rules.md)                              | Tool arguments, results, errors, model-facing guidance, listing scope, task names, target resolution, and retry semantics.               |
 | [Tool activation](tool-activation-rules.md)         | Tool visibility by role, member configuration, and catalog refresh.                                                                      |
 | [Agent frontmatter](agent-frontmatter-rules.md)     | Agent definition fields, discovery, parsing, and validation.                                                                             |
+

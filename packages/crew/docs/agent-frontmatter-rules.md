@@ -29,7 +29,7 @@ Discover `.md` files with frontmatter in the following locations, highest preced
 
 1. `.pi/agents/` under the lead's project cwd.
 2. `$PI_CODING_AGENT_DIR/agents/` (default `~/.pi/agent/agents/`).
-3. Bundled `src/agents/bundled/` in this extension.
+3. Bundled `src/catalog/bundled/` in this extension.
 
 - When definitions share a `name`, the highest-precedence definition wins.
 - Nested spawns use the same catalog roots. A member's cwd does not change the project catalog location.
