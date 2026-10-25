@@ -194,8 +194,6 @@ def run_scenario(scenario: HerdrScenario) -> None:
             "--timeout",
             "60000",
             "--",
-            "-e",
-            str(EXTENSION.resolve()),
             "--thinking",
             "low",
             "--crew-mode",

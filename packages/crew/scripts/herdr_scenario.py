@@ -26,9 +26,7 @@ class HerdrScenario:
         if not self.project.is_dir():
             raise ScenarioError(f"Project directory not found: {self.project}")
         if os.environ.get("HERDR_ENV") != "1":
-            raise ScenarioError(
-                "Run this scenario from a Herdr-managed pane (HERDR_ENV=1 is required)."
-            )
+            raise ScenarioError("Run this scenario from a Herdr-managed pane (HERDR_ENV=1 is required).")
         for executable in ("herdr", "pi"):
             if not shutil.which(executable):
                 raise ScenarioError(f"{executable} is not on PATH.")
@@ -55,14 +53,10 @@ class HerdrScenario:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired as error:
-            raise ScenarioError(
-                f"Command timed out after {timeout:g}s: {' '.join(argv)}"
-            ) from error
+            raise ScenarioError(f"Command timed out after {timeout:g}s: {' '.join(argv)}") from error
         if completed.returncode != 0:
             details = completed.stderr.strip() or completed.stdout.strip()
-            raise ScenarioError(
-                f"Command failed ({completed.returncode}): {' '.join(argv)}\n{details}"
-            )
+            raise ScenarioError(f"Command failed ({completed.returncode}): {' '.join(argv)}\n{details}")
         return completed.stdout
 
     def herdr(self, args: list[str], *, timeout: float = 15) -> dict[str, Any]:
@@ -71,9 +65,7 @@ class HerdrScenario:
         try:
             response = json.loads(output)
         except json.JSONDecodeError as error:
-            raise ScenarioError(
-                f"Herdr returned invalid JSON for {args[0]}."
-            ) from error
+            raise ScenarioError(f"Herdr returned invalid JSON for {args[0]}.") from error
         result = response.get("result")
         if not isinstance(result, dict):
             raise ScenarioError(f"Herdr returned no result object for {args[0]}.")
@@ -100,9 +92,7 @@ class HerdrScenario:
         self.tab_id = tab.get("tab_id")
         self.lead_pane_id = root_pane.get("pane_id")
         if not all((self.workspace_id, self.tab_id, self.lead_pane_id)):
-            raise ScenarioError(
-                "Herdr workspace creation omitted a workspace, tab, or pane ID."
-            )
+            raise ScenarioError("Herdr workspace creation omitted a workspace, tab, or pane ID.")
 
     def write_definition(
         self,
@@ -140,9 +130,7 @@ class HerdrScenario:
         if not extension.is_file():
             raise ScenarioError(f"Crew extension entry point not found: {extension}")
         self.lead_name = name
-        self.command(
-            ["herdr", "pane", "rename", self.lead_pane_id, f"crew-pending-{name}"]
-        )
+        self.command(["herdr", "pane", "rename", self.lead_pane_id, f"crew-pending-{name}"])
         self.herdr(
             [
                 "agent",
@@ -155,8 +143,6 @@ class HerdrScenario:
                 "--timeout",
                 "60000",
                 "--",
-                "-e",
-                str(extension.resolve()),
                 "--thinking",
                 "low",
             ],
@@ -174,8 +160,7 @@ class HerdrScenario:
                 (
                     pane
                     for pane in self.pane_list()
-                    if pane.get("pane_id") == self.lead_pane_id
-                    and pane.get("label") == "lead"
+                    if pane.get("pane_id") == self.lead_pane_id and pane.get("label") == "lead"
                 ),
                 None,
             ),
@@ -186,9 +171,7 @@ class HerdrScenario:
         """Return panes in this scenario's workspace."""
         if not self.workspace_id:
             raise ScenarioError("Create the workspace before listing its panes.")
-        panes = self.herdr(["pane", "list", "--workspace", self.workspace_id]).get(
-            "panes"
-        )
+        panes = self.herdr(["pane", "list", "--workspace", self.workspace_id]).get("panes")
         if not isinstance(panes, list):
             raise ScenarioError("Herdr returned no pane list.")
         return panes
@@ -225,13 +208,9 @@ class HerdrScenario:
         if not self.lead_name or not self.lead_pane_id:
             raise ScenarioError("Start the lead before spawning a menu agent.")
         self.command(["herdr", "agent", "prompt", self.lead_name, "/crew"])
-        self.wait_for_agent_text(
-            self.lead_name, "Spawn agent", timeout=15, source="visible"
-        )
+        self.wait_for_agent_text(self.lead_name, "Spawn agent", timeout=15, source="visible")
         self.command(["herdr", "agent", "send-keys", self.lead_name, "enter"])
-        self.wait_for_agent_text(
-            self.lead_name, "Spawn agent ·", timeout=15, source="visible"
-        )
+        self.wait_for_agent_text(self.lead_name, "Spawn agent ·", timeout=15, source="visible")
         self.command(["herdr", "pane", "send-text", self.lead_pane_id, definition])
         self.command(["herdr", "agent", "send-keys", self.lead_name, "enter"])
         pane_id = self.wait_for_agent_pane(definition)
@@ -239,9 +218,7 @@ class HerdrScenario:
         self.command(["herdr", "agent", "send-keys", self.lead_name, "esc"])
         return pane_id
 
-    def agent_output(
-        self, target: str, *, source: str = "recent-unwrapped", lines: int = 120
-    ) -> str:
+    def agent_output(self, target: str, *, source: str = "recent-unwrapped", lines: int = 120) -> str:
         """Read an agent terminal snapshot using Herdr's selected output source."""
         return self.command(
             [
@@ -289,11 +266,7 @@ class HerdrScenario:
     def agent_pane(self, definition: str) -> str | None:
         """Return a pane ID currently labeled or titled with an agent definition."""
         pane = next(
-            (
-                pane
-                for pane in self.pane_list()
-                if pane.get("label") == definition or pane.get("title") == definition
-            ),
+            (pane for pane in self.pane_list() if pane.get("label") == definition or pane.get("title") == definition),
             None,
         )
         pane_id = pane.get("pane_id") if pane else None
@@ -314,9 +287,7 @@ class HerdrScenario:
                 return value
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ScenarioError(
-                    f"Timed out after {timeout:g}s waiting for {description}."
-                )
+                raise ScenarioError(f"Timed out after {timeout:g}s waiting for {description}.")
             time.sleep(min(0.25, remaining))
 
     def require(self, condition: bool, message: str) -> None:
