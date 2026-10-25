@@ -5,7 +5,9 @@ const INSTALL = Symbol.for("dotfiles.skill-invocation-manager.installed");
 
 export default function skillInvocationManager(pi: ExtensionAPI): void {
   const guard = pi as unknown as Record<PropertyKey, unknown>;
-  if (guard[INSTALL]) {return;}
+  if (guard[INSTALL]) {
+    return;
+  }
   guard[INSTALL] = true;
 
   pi.registerCommand("skill", {

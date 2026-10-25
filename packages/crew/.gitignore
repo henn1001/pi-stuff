@@ -1,0 +1,6 @@
+node_modules/
+tests_tmp/
+__pycache__/
+.ruff_cache/
+.pi/*
+.ref/*

@@ -16,16 +16,22 @@ export type SkillCommand = {
 
 export function parseSkillCommand(raw: string): SkillCommand {
   const trimmed = raw.trim();
-  if (!trimmed) {return { action: "browse" };}
+  if (!trimmed) {
+    return { action: "browse" };
+  }
   const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/)!;
   const action = match[1]!.toLowerCase();
   const identifier = match[2]?.trim();
   if (action === "list") {
-    if (identifier) {throw new Error("Usage: /skill list");}
+    if (identifier) {
+      throw new Error("Usage: /skill list");
+    }
     return { action };
   }
   if (action === "status" || action === "enable" || action === "disable") {
-    if (!identifier) {throw new Error(`Usage: /skill ${action} <name-or-path>`);}
+    if (!identifier) {
+      throw new Error(`Usage: /skill ${action} <name-or-path>`);
+    }
     return { action, identifier };
   }
   throw new Error(
@@ -57,7 +63,9 @@ function state(skill: SkillEntry): string {
 }
 
 function listText(registry: SkillRegistry): string {
-  if (!registry.skills.length) {return "No enabled skills were found.";}
+  if (!registry.skills.length) {
+    return "No enabled skills were found.";
+  }
   return registry.skills
     .map((skill) => `${skill.name}\t${state(skill)}\t${skill.scope}\t${skill.path}`)
     .join("\n");
@@ -102,7 +110,9 @@ export async function handleSkillCommand(
       },
       onRefresh: async () => await registryFor(ctx),
     });
-    if (selected) {ctx.ui.pasteToEditor(`/skill:${selected.name}\n`);}
+    if (selected) {
+      ctx.ui.pasteToEditor(`/skill:${selected.name}\n`);
+    }
     return;
   }
 

@@ -18,7 +18,9 @@ function skill(name: string, path: string): SkillEntry {
 
 function registry(skills: SkillEntry[]): SkillRegistry {
   const byName = new Map<string, SkillEntry[]>();
-  for (const item of skills) {byName.set(item.name, [...(byName.get(item.name) ?? []), item]);}
+  for (const item of skills) {
+    byName.set(item.name, [...(byName.get(item.name) ?? []), item]);
+  }
   return {
     skills,
     byPath: new Map(skills.map((item) => [item.path, item])),

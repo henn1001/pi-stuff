@@ -48,7 +48,9 @@ function parseEntry(
     const name = typeof frontmatter.name === "string" ? frontmatter.name.trim() : "";
     const description =
       typeof frontmatter.description === "string" ? frontmatter.description.trim() : "";
-    if (!name || !description) {return null;}
+    if (!name || !description) {
+      return null;
+    }
     return {
       name,
       description,
@@ -108,10 +110,16 @@ export async function loadSkillRegistry(
 
   const entries = candidates.map(({ path, metadata }) => parseEntry(path, metadata));
   const byPath = new Map<string, SkillEntry>();
-  for (const entry of entries) {if (entry) {byPath.set(entry.path, entry);}}
+  for (const entry of entries) {
+    if (entry) {
+      byPath.set(entry.path, entry);
+    }
+  }
   const skills = [...byPath.values()].sort(compareSkills);
   const byName = new Map<string, SkillEntry[]>();
-  for (const skill of skills) {byName.set(skill.name, [...(byName.get(skill.name) ?? []), skill]);}
+  for (const skill of skills) {
+    byName.set(skill.name, [...(byName.get(skill.name) ?? []), skill]);
+  }
   return { skills, byPath, byName };
 }
 
@@ -123,11 +131,17 @@ export function resolveSkillIdentifier(
   cwd: string,
 ): SkillEntry {
   const value = identifier.trim();
-  if (!value) {throw new SkillIdentifierError("A skill name or path is required.");}
+  if (!value) {
+    throw new SkillIdentifierError("A skill name or path is required.");
+  }
   const exactPath = registry.byPath.get(resolve(cwd, value)) ?? registry.byPath.get(resolve(value));
-  if (exactPath) {return exactPath;}
+  if (exactPath) {
+    return exactPath;
+  }
   const named = registry.byName.get(value) ?? [];
-  if (named.length === 1) {return named[0]!;}
+  if (named.length === 1) {
+    return named[0]!;
+  }
   if (named.length > 1) {
     throw new SkillIdentifierError(
       `Skill name '${value}' is ambiguous. Use one of these paths:\n${named.map((skill) => `- ${skill.path}`).join("\n")}`,

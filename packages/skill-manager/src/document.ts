@@ -28,14 +28,16 @@ interface FrontmatterBounds {
 
 function findFrontmatterBounds(raw: string): FrontmatterBounds {
   const opening = raw.match(/^\uFEFF?---[ \t]*(\r?\n)/);
-  if (!opening)
-    {throw new SkillDocumentError("Skill must start with YAML frontmatter delimited by ---");}
+  if (!opening) {
+    throw new SkillDocumentError("Skill must start with YAML frontmatter delimited by ---");
+  }
   const bodyStart = opening[0].length;
   const closingPattern = /^---[ \t]*(?:\r?\n|$)/gm;
   closingPattern.lastIndex = bodyStart;
   const closing = closingPattern.exec(raw);
-  if (!closing)
-    {throw new SkillDocumentError("Skill frontmatter is missing its closing --- delimiter");}
+  if (!closing) {
+    throw new SkillDocumentError("Skill frontmatter is missing its closing --- delimiter");
+  }
   return {
     bodyStart,
     closeStart: closing.index,
@@ -76,7 +78,9 @@ export function setDisableModelInvocationInDocument(raw: string, disabled: boole
   if (matches.length === 1) {
     const match = matches[0]!;
     const current = match[3] === "true";
-    if (current === disabled) {return raw;}
+    if (current === disabled) {
+      return raw;
+    }
     const relativeValueStart = match.index! + match[1]!.length + match[2]!.length;
     const absoluteValueStart = bounds.bodyStart + relativeValueStart;
     return `${raw.slice(0, absoluteValueStart)}${disabled ? "true" : "false"}${raw.slice(absoluteValueStart + match[3]!.length)}`;
@@ -111,7 +115,9 @@ async function withFileMutationQueue<T>(path: string, operation: () => Promise<T
     return await operation();
   } finally {
     release();
-    if (fileQueues.get(path) === chained) {fileQueues.delete(path);}
+    if (fileQueues.get(path) === chained) {
+      fileQueues.delete(path);
+    }
   }
 }
 
@@ -171,7 +177,9 @@ export async function setSkillModelInvocation(
         "Updated frontmatter did not preserve the requested invocation state",
       );
     }
-    if (next === raw) {return { changed: false, disabled };}
+    if (next === raw) {
+      return { changed: false, disabled };
+    }
     atomicWrite(target, next);
     return { changed: true, disabled };
   });

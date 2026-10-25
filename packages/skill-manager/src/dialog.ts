@@ -58,7 +58,9 @@ export function visibleListRows(terminalRows: number): number {
 export function browseWindow(count: number, selected: number, rows: number): BrowseWindow {
   const safeCount = Math.max(0, Math.floor(count));
   const safeRows = Math.max(1, Math.floor(rows));
-  if (!safeCount) {return { startIndex: 0, endIndex: 0, rows: safeRows };}
+  if (!safeCount) {
+    return { startIndex: 0, endIndex: 0, rows: safeRows };
+  }
   const safeSelected = Math.max(0, Math.min(safeCount - 1, Math.floor(selected)));
   const startIndex = Math.max(
     0,
@@ -93,8 +95,9 @@ function frame(
   focused: boolean,
   right = "",
 ): string[] {
-  if (width < 8)
-    {return [pad(title, width), ...lines.map((line) => pad(line, width)), " ".repeat(width)];}
+  if (width < 8) {
+    return [pad(title, width), ...lines.map((line) => pad(line, width)), " ".repeat(width)];
+  }
   const border = focused ? "borderAccent" : "borderMuted";
   const inner = width - 4;
   const available = inner + 2;
@@ -169,7 +172,9 @@ class SkillDialog implements Focusable {
     });
     if (preferredPath) {
       const index = this.filtered.findIndex((skill) => skill.path === preferredPath);
-      if (index >= 0) {this.selected = index;}
+      if (index >= 0) {
+        this.selected = index;
+      }
     }
     this.selected = Math.max(0, Math.min(this.selected, Math.max(0, this.filtered.length - 1)));
   }
@@ -202,7 +207,9 @@ class SkillDialog implements Focusable {
       : [...this.input.render(inner), ""];
     const rows = visibleListRows(this.tui.terminal.rows);
     const window = browseWindow(this.filtered.length, this.selected, rows);
-    if (!this.filtered.length) {body.push(this.theme.fg("dim", "No matching skills."));}
+    if (!this.filtered.length) {
+      body.push(this.theme.fg("dim", "No matching skills."));
+    }
     for (let index = window.startIndex; index < window.endIndex; index++) {
       const skill = this.filtered[index]!;
       const selected = index === this.selected;
@@ -213,7 +220,9 @@ class SkillDialog implements Focusable {
       body.push(selected ? this.theme.bg("selectedBg", pad(line, inner)) : clipLine(line, inner));
     }
     const bodyRows = Math.max(0, paneRows - 2);
-    while (body.length < bodyRows) {body.push("");}
+    while (body.length < bodyRows) {
+      body.push("");
+    }
     return frame(this.theme, width, body.slice(0, bodyRows), "Skills", !this.detailFocused);
   }
 
@@ -256,7 +265,9 @@ class SkillDialog implements Focusable {
     const max = Math.max(0, this.previewLines.length - visibleRows);
     this.scroll = Math.max(0, Math.min(this.scroll, max));
     const body = this.previewLines.slice(this.scroll, this.scroll + visibleRows);
-    while (body.length < visibleRows) {body.push("");}
+    while (body.length < visibleRows) {
+      body.push("");
+    }
     const position = skill
       ? `${this.scroll + 1}–${Math.min(this.previewLines.length, this.scroll + visibleRows)}/${this.previewLines.length}`
       : "";
@@ -317,7 +328,9 @@ class SkillDialog implements Focusable {
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (event.type !== "wheel") {return;}
+    if (event.type !== "wheel") {
+      return;
+    }
     const layout = browserLayout(event.width, this.tui.terminal.rows);
     const overDetail = layout.split ? event.x >= layout.listWidth : this.detailFocused;
     if (event.y > 0 && event.y < layout.paneRows + 1) {
@@ -348,29 +361,40 @@ class SkillDialog implements Focusable {
         this.query = "";
         this.input.setValue("");
         this.filter();
-      } else {this.done(null);}
+      } else {
+        this.done(null);
+      }
       return;
     }
     const skill = this.selectedSkill();
     if (matchesKey(data, Key.enter)) {
-      if (skill) {this.done(skill);}
+      if (skill) {
+        this.done(skill);
+      }
       return;
     }
     if (matchesKey(data, Key.ctrl("x")) || matchesKey(data, Key.alt("x"))) {
-      if (skill) {void this.toggle(skill);}
+      if (skill) {
+        void this.toggle(skill);
+      }
       return;
     }
     if (this.detailFocused) {
       const page = browserLayout(this.tui.terminal.columns, this.tui.terminal.rows).detailRows;
       const max = Math.max(0, this.previewLines.length - page);
-      if (matchesKey(data, Key.up)) {this.scroll = Math.max(0, this.scroll - 1);}
-      else if (matchesKey(data, Key.down)) {this.scroll = Math.min(max, this.scroll + 1);}
-      else if (matchesKey(data, "-") || matchesKey(data, Key.pageUp))
-        {this.scroll = Math.max(0, this.scroll - page);}
-      else if (matchesKey(data, "=") || matchesKey(data, Key.pageDown))
-        {this.scroll = Math.min(max, this.scroll + page);}
-      else if (matchesKey(data, Key.home)) {this.scroll = 0;}
-      else if (matchesKey(data, Key.end)) {this.scroll = max;}
+      if (matchesKey(data, Key.up)) {
+        this.scroll = Math.max(0, this.scroll - 1);
+      } else if (matchesKey(data, Key.down)) {
+        this.scroll = Math.min(max, this.scroll + 1);
+      } else if (matchesKey(data, "-") || matchesKey(data, Key.pageUp)) {
+        this.scroll = Math.max(0, this.scroll - page);
+      } else if (matchesKey(data, "=") || matchesKey(data, Key.pageDown)) {
+        this.scroll = Math.min(max, this.scroll + page);
+      } else if (matchesKey(data, Key.home)) {
+        this.scroll = 0;
+      } else if (matchesKey(data, Key.end)) {
+        this.scroll = max;
+      }
       return;
     }
     if (matchesKey(data, Key.up)) {

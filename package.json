@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^1.4.0",
     "@earendil-works/pi-coding-agent": "^1.4.0",
     "@earendil-works/pi-tui": "^1.4.0",
     "@types/bun": "^1.4.4",
@@ -29,7 +30,8 @@
     "extensions": [
       "./packages/ask-user/index.ts",
       "./packages/presets/index.ts",
-      "./packages/skill-manager/index.ts"
+      "./packages/skill-manager/index.ts",
+      "./packages/crew/index.ts"
     ]
   }
 }

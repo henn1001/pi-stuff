@@ -88,7 +88,9 @@ function wrapText(text: string, width: number): string[] {
         current = candidate;
       }
     }
-    if (current) {lines.push(current);}
+    if (current) {
+      lines.push(current);
+    }
   }
   return lines;
 }
@@ -142,7 +144,9 @@ export default function askUser(pi: ExtensionAPI) {
           let settled = false;
 
           function finish(result: SelectionResult) {
-            if (settled) {return;}
+            if (settled) {
+              return;
+            }
             settled = true;
             uiSignal.removeEventListener("abort", cancel);
             done(result);
@@ -153,7 +157,9 @@ export default function askUser(pi: ExtensionAPI) {
           }
 
           uiSignal.addEventListener("abort", cancel, { once: true });
-          if (uiSignal.aborted) {queueMicrotask(cancel);}
+          if (uiSignal.aborted) {
+            queueMicrotask(cancel);
+          }
 
           const editorTheme: EditorTheme = {
             borderColor: (s) => theme.fg("accent", s),
@@ -239,7 +245,9 @@ export default function askUser(pi: ExtensionAPI) {
           }
 
           function render(width: number): string[] {
-            if (cachedLines) {return cachedLines;}
+            if (cachedLines) {
+              return cachedLines;
+            }
 
             const lines: string[] = [];
             const add = (s: string) => lines.push(truncateToWidth(s, width));
