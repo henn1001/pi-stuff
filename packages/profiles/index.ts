@@ -1,15 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { readBranchProfile, type StoredProfile } from "./src/presets";
+import { readBranchProfile, type StoredProfile } from "./src/profiles";
 import {
   abandonPendingSelection,
   activateSelection,
   applyProfile,
-  selectPreset,
+  selectProfile,
   stageSelection,
   type PendingSelection,
 } from "./src/runtime";
 
-export default function presetExtension(pi: ExtensionAPI): void {
+export default function profileExtension(pi: ExtensionAPI): void {
   let pendingSelection: PendingSelection | undefined;
   let activeProfile: StoredProfile | undefined;
   const warnedMissingSkills = new Set<string>();
@@ -20,11 +20,11 @@ export default function presetExtension(pi: ExtensionAPI): void {
     }
 
     const name = activeProfile?.definition.name ?? activeProfile?.name;
-    ctx.ui.setStatus("preset", name ? ctx.ui.theme.fg("accent", `preset:${name}`) : undefined);
+    ctx.ui.setStatus("profile", name ? ctx.ui.theme.fg("accent", `profile:${name}`) : undefined);
   }
 
-  pi.registerFlag("preset", {
-    description: "Preset to use for new sessions",
+  pi.registerFlag("profile", {
+    description: "Profile to use for new sessions",
     type: "string",
   });
 
@@ -37,7 +37,7 @@ export default function presetExtension(pi: ExtensionAPI): void {
 
     // A branch snapshot takes precedence over the CLI flag and files on disk.
     if (activeProfile) {
-      const requested = pi.getFlag("preset");
+      const requested = pi.getFlag("profile");
       if (
         event.reason === "startup" &&
         typeof requested === "string" &&
@@ -45,7 +45,7 @@ export default function presetExtension(pi: ExtensionAPI): void {
         requested !== activeProfile.name
       ) {
         ctx.ui.notify(
-          `Requested preset "${requested}" is ignored on resume; restoring active-branch snapshot "${activeProfile.name}". The requested name remains the default for later /new sessions.`,
+          `Requested profile "${requested}" is ignored on resume; restoring active-branch snapshot "${activeProfile.name}". The requested name remains the default for later /new sessions.`,
           "warning",
         );
       }
@@ -53,7 +53,7 @@ export default function presetExtension(pi: ExtensionAPI): void {
       return;
     }
 
-    pendingSelection = selectPreset(pi, event.reason, ctx);
+    pendingSelection = selectProfile(pi, event.reason, ctx);
   });
 
   pi.on("resources_discover", async (event, ctx) => {

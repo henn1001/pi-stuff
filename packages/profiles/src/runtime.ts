@@ -10,19 +10,19 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   canonicalJson,
-  loadPreset,
-  PRESET_CUSTOM_TYPE,
-  type PresetDefinition,
-  type PresetThinkingLevel,
+  loadProfile,
+  PROFILE_CUSTOM_TYPE,
+  type ProfileDefinition,
+  type ProfileThinkingLevel,
   type StoredProfile,
-} from "./presets";
+} from "./profiles";
 
 // A selection is temporary until startup applies its runtime settings and records a snapshot.
 export type PendingSelection = {
   pi: ExtensionAPI;
   name: string;
   sourcePath: string;
-  definition: PresetDefinition;
+  definition: ProfileDefinition;
   stagingAttempted: boolean;
   stagingComplete: boolean;
   stagedTools?: string[];
@@ -35,24 +35,24 @@ export type PendingSelection = {
 const DEFAULT_PREAMBLE =
   "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 
-export function selectPreset(
+export function selectProfile(
   pi: ExtensionAPI,
   reason: SessionStartEvent["reason"],
   ctx: ExtensionContext,
 ): PendingSelection | undefined {
-  const presetFlag = pi.getFlag("preset");
+  const profileFlag = pi.getFlag("profile");
 
   if (reason === "reload") {
-    if (typeof presetFlag === "string" && presetFlag) {
+    if (typeof profileFlag === "string" && profileFlag) {
       ctx.ui.notify(
-        `Preset flag "${presetFlag}" is ignored on reload because the active branch has no valid preset snapshot; no preset customization was applied. Use /new or restart to select a preset.`,
+        `Profile flag "${profileFlag}" is ignored on reload because the active branch has no valid profile snapshot; no profile customization was applied. Use /new or restart to select a profile.`,
         "warning",
       );
     }
     return;
   }
 
-  if (typeof presetFlag !== "string" || !presetFlag) {
+  if (typeof profileFlag !== "string" || !profileFlag) {
     return;
   }
 
@@ -60,23 +60,23 @@ export function selectPreset(
     return;
   }
 
-  if (!branchCanSelectPreset(ctx)) {
+  if (!branchCanSelectProfile(ctx)) {
     ctx.ui.notify(
-      `Cannot attach preset "${presetFlag}" to this existing unprofiled session; no preset customization was applied. Use /new or start a new session with --preset.`,
+      `Cannot attach profile "${profileFlag}" to this existing unprofiled session; no profile customization was applied. Use /new or start a new session with --profile.`,
       "warning",
     );
     return;
   }
 
-  const preset = loadPreset(presetFlag, ctx);
-  if (!preset) {
+  const profile = loadProfile(profileFlag, ctx);
+  if (!profile) {
     return;
   }
 
   return {
     pi,
-    name: presetFlag,
-    ...preset,
+    name: profileFlag,
+    ...profile,
     stagingAttempted: false,
     stagingComplete: false,
   };
@@ -99,7 +99,7 @@ export function stageSelection(selection: PendingSelection, ctx: ExtensionContex
   });
   if (unavailable.length > 0) {
     ctx.ui.notify(
-      `${sourceLabel(selection)}: unavailable or hidden tools: ${unavailable.join(", ")}; no tools were staged, the preset was skipped, and Pi's startup tool loadout remains unchanged.`,
+      `${sourceLabel(selection)}: unavailable or hidden tools: ${unavailable.join(", ")}; no tools were staged, the profile was skipped, and Pi's startup tool loadout remains unchanged.`,
       "warning",
     );
     return false;
@@ -152,7 +152,7 @@ export async function activateSelection(
         "an explicit thinking level cannot be validated because there is no target model",
       );
     }
-    const supported = getSupportedThinkingLevels(targetModel) as PresetThinkingLevel[];
+    const supported = getSupportedThinkingLevels(targetModel) as ProfileThinkingLevel[];
     if (!supported.includes(selection.definition.thinkingLevel)) {
       return rejectSelection(
         selection,
@@ -189,7 +189,7 @@ export async function activateSelection(
     name: selection.name,
     definition: selection.definition,
   };
-  selection.pi.appendEntry(PRESET_CUSTOM_TYPE, snapshot);
+  selection.pi.appendEntry(PROFILE_CUSTOM_TYPE, snapshot);
 
   return { name: selection.name, definition: selection.definition };
 }
@@ -204,7 +204,7 @@ export function applyProfile(
   const conflict = findPromptConflict(options, profile.definition);
   if (conflict) {
     ctx.ui.notify(
-      `Preset snapshot "${profile.name}": ${conflict}; applying no preset customization for this run and retaining Pi's restored runtime state.`,
+      `Profile snapshot "${profile.name}": ${conflict}; applying no profile customization for this run and retaining Pi's restored runtime state.`,
       "warning",
     );
     return;
@@ -240,7 +240,7 @@ function rejectSelection(
   const actualTools = restoreStagedTools(selection);
 
   ctx.ui.notify(
-    `${sourceLabel(selection)}: ${reason}; ${describeToolFallback(selection, actualTools)}. Continuing without preset customization.`,
+    `${sourceLabel(selection)}: ${reason}; ${describeToolFallback(selection, actualTools)}. Continuing without profile customization.`,
     "warning",
   );
 }
@@ -266,7 +266,7 @@ function describeToolFallback(selection: PendingSelection, actual: string[] | un
 }
 
 function sourceLabel(selection: PendingSelection): string {
-  return `Preset "${selection.name}" (${selection.sourcePath})`;
+  return `Profile "${selection.name}" (${selection.sourcePath})`;
 }
 
 function sameNames(left: string[], right: string[]): boolean {
@@ -275,7 +275,7 @@ function sameNames(left: string[], right: string[]): boolean {
   return leftSet.size === rightSet.size && [...leftSet].every((name) => rightSet.has(name));
 }
 
-function branchCanSelectPreset(ctx: ExtensionContext): boolean {
+function branchCanSelectProfile(ctx: ExtensionContext): boolean {
   return ctx.sessionManager
     .getBranch()
     .every((entry) => entry.type === "model_change" || entry.type === "thinking_level_change");
@@ -283,19 +283,19 @@ function branchCanSelectPreset(ctx: ExtensionContext): boolean {
 
 function findPromptConflict(
   options: NormalizedBuildSystemPromptOptions,
-  definition: PresetDefinition,
+  definition: ProfileDefinition,
 ): string | undefined {
   if (options.forceSystemPrompt !== undefined) {
-    return "forceSystemPrompt conflicts with every preset";
+    return "forceSystemPrompt conflicts with every profile";
   }
 
   if (ownsBasePrompt(definition) && options.customPrompt !== undefined) {
-    return "customPrompt conflicts with a preset that owns base-prompt composition";
+    return "customPrompt conflicts with a profile that owns base-prompt composition";
   }
   return undefined;
 }
 
-function ownsBasePrompt(definition: PresetDefinition): boolean {
+function ownsBasePrompt(definition: ProfileDefinition): boolean {
   // Explicit true values keep Pi's normal composition; overrides require rebuilding the base.
   const prompt = definition.prompt;
   return Boolean(
@@ -309,7 +309,7 @@ function ownsBasePrompt(definition: PresetDefinition): boolean {
 
 function preparePromptOptions(
   options: NormalizedBuildSystemPromptOptions,
-  definition: PresetDefinition,
+  definition: ProfileDefinition,
 ): NormalizedBuildSystemPromptOptions {
   // Work on a copy so validation failures cannot partially alter this run's prompt.
   const prepared: NormalizedBuildSystemPromptOptions = {
@@ -387,7 +387,7 @@ function warnMissingSkillsOnce(
 
   warned.add(key);
   ctx.ui.notify(
-    `Preset snapshot "${profile.name}" references missing skills: ${missing.join(", ")}; they are omitted from advertising and the snapshot is unchanged.`,
+    `Profile snapshot "${profile.name}" references missing skills: ${missing.join(", ")}; they are omitted from advertising and the snapshot is unchanged.`,
     "warning",
   );
 }

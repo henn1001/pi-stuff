@@ -78,7 +78,7 @@ function makeOptions(input: PromptInput = {}) {
 function applyBasePrompt(
   input: PromptInput = {},
   prompt: { preamble?: string; docs?: boolean; tools?: boolean; rules?: boolean } = {
-    preamble: "Preset preamble",
+    preamble: "Profile preamble",
   },
 ) {
   const options = makeOptions(input);

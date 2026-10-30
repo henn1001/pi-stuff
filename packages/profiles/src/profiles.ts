@@ -8,18 +8,18 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 // Frontmatter controls startup settings; the Markdown body supplies prompt instructions.
-export type PresetThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ProfileThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 type PromptConfig = {
   preamble?: string;
   docs?: boolean;
   tools?: boolean;
   rules?: boolean;
 };
-export type PresetDefinition = {
+export type ProfileDefinition = {
   name?: string;
   description?: string;
   model?: string;
-  thinkingLevel?: PresetThinkingLevel;
+  thinkingLevel?: ProfileThinkingLevel;
   tools?: string[];
   skills?: string[];
   prompt?: PromptConfig;
@@ -28,17 +28,17 @@ export type PresetDefinition = {
 // The complete definition is persisted so resume never depends on the source file.
 export type StoredProfile = {
   name: string;
-  definition: PresetDefinition;
+  definition: ProfileDefinition;
 };
-type PresetPaths = {
+type ProfilePaths = {
   project: Map<string, string>;
   global: Map<string, string>;
   errors: string[];
 };
 
-export const PRESET_CUSTOM_TYPE = "presets:profile";
+export const PROFILE_CUSTOM_TYPE = "profiles:profile";
 
-const ALLOWED_THINKING_LEVELS = new Set<PresetThinkingLevel>([
+const ALLOWED_THINKING_LEVELS = new Set<ProfileThinkingLevel>([
   "off",
   "minimal",
   "low",
@@ -59,18 +59,18 @@ const ALLOWED_FIELDS = new Set([
 
 const ALLOWED_PROMPT_FIELDS = new Set(["preamble", "docs", "tools", "rules"]);
 
-export function loadPreset(
+export function loadProfile(
   name: string,
   ctx: ExtensionContext,
-): { sourcePath: string; definition: PresetDefinition } | undefined {
-  const paths = loadPresetPaths(ctx.cwd);
+): { sourcePath: string; definition: ProfileDefinition } | undefined {
+  const paths = loadProfilePaths(ctx.cwd);
   const projectDir = join(ctx.cwd, CONFIG_DIR_NAME, "agents");
   const projectScanFailed = paths.errors.some((error) => error.startsWith(`${projectDir}:`));
 
-  // Do not fall back to a global preset when an unreadable project directory could shadow it.
+  // Do not fall back to a global profile when an unreadable project directory could shadow it.
   if (!paths.project.has(name) && projectScanFailed) {
     ctx.ui.notify(
-      `Cannot resolve preset "${name}" because project presets could not be scanned: ${paths.errors.join("; ")}. No preset customization was applied.`,
+      `Cannot resolve profile "${name}" because project profiles could not be scanned: ${paths.errors.join("; ")}. No profile customization was applied.`,
       "warning",
     );
     return;
@@ -81,21 +81,21 @@ export function loadPreset(
     const available = [...new Set([...paths.project.keys(), ...paths.global.keys()])].sort();
     const scanError =
       paths.errors.length > 0
-        ? ` Could not scan preset directories: ${paths.errors.join("; ")}.`
+        ? ` Could not scan profile directories: ${paths.errors.join("; ")}.`
         : "";
     ctx.ui.notify(
-      `Unknown preset "${name}". Available: ${available.join(", ") || "(none)"}.${scanError} No preset customization was applied; Pi's startup configuration is unchanged.`,
+      `Unknown profile "${name}". Available: ${available.join(", ") || "(none)"}.${scanError} No profile customization was applied; Pi's startup configuration is unchanged.`,
       "warning",
     );
     return;
   }
 
   try {
-    const definition = parsePresetFile(sourcePath);
+    const definition = parseProfileFile(sourcePath);
     return { sourcePath, definition };
   } catch (error) {
     ctx.ui.notify(
-      `Preset "${name}" (${sourcePath}) is invalid: ${String(error)}. Skipping the entire preset and continuing with Pi's startup configuration.`,
+      `Profile "${name}" (${sourcePath}) is invalid: ${String(error)}. Skipping the entire profile and continuing with Pi's startup configuration.`,
       "warning",
     );
   }
@@ -105,7 +105,7 @@ export function readBranchProfile(ctx: ExtensionContext): StoredProfile | undefi
   // Only the active branch owns this profile; abandoned branches must not affect it.
   const profileEntries = ctx.sessionManager
     .getBranch()
-    .filter((entry) => entry.type === "custom" && entry.customType === PRESET_CUSTOM_TYPE);
+    .filter((entry) => entry.type === "custom" && entry.customType === PROFILE_CUSTOM_TYPE);
   if (profileEntries.length === 0) {
     return undefined;
   }
@@ -117,7 +117,7 @@ export function readBranchProfile(ctx: ExtensionContext): StoredProfile | undefi
     }
   } catch (error) {
     ctx.ui.notify(
-      `Stored preset snapshot is invalid (${String(error)}); applying no preset customization and retaining Pi's restored runtime state.`,
+      `Stored profile snapshot is invalid (${String(error)}); applying no profile customization and retaining Pi's restored runtime state.`,
       "warning",
     );
     return undefined;
@@ -126,7 +126,7 @@ export function readBranchProfile(ctx: ExtensionContext): StoredProfile | undefi
   const keys = new Set(profiles.map((profile) => canonicalJson({ schemaVersion: 1, ...profile })));
   if (keys.size > 1) {
     ctx.ui.notify(
-      "Conflicting preset snapshots exist on the active branch; applying no preset customization and retaining Pi's restored runtime state.",
+      "Conflicting profile snapshots exist on the active branch; applying no profile customization and retaining Pi's restored runtime state.",
       "warning",
     );
     return undefined;
@@ -155,13 +155,13 @@ function validateSnapshot(data: unknown): StoredProfile {
   return { name: data.name, definition };
 }
 
-function parsePresetFile(path: string): PresetDefinition {
+function parseProfileFile(path: string): ProfileDefinition {
   const parsed = parseFrontmatter<Record<string, unknown>>(readFileSync(path, "utf-8"));
 
   return validateDefinition(parsed.frontmatter, parsed.body);
 }
 
-function parseSnapshotDefinition(value: unknown): PresetDefinition {
+function parseSnapshotDefinition(value: unknown): ProfileDefinition {
   if (!isRecord(value)) {
     throw new Error("definition must be a mapping");
   }
@@ -171,7 +171,11 @@ function parseSnapshotDefinition(value: unknown): PresetDefinition {
   return validateDefinition(config, body, false);
 }
 
-function validateDefinition(config: unknown, body: unknown, requireField = true): PresetDefinition {
+function validateDefinition(
+  config: unknown,
+  body: unknown,
+  requireField = true,
+): ProfileDefinition {
   if (!isRecord(config)) {
     throw new Error("frontmatter must be a mapping");
   }
@@ -186,7 +190,7 @@ function validateDefinition(config: unknown, body: unknown, requireField = true)
     throw new Error("Markdown body must be a string");
   }
 
-  const definition: PresetDefinition = { body };
+  const definition: ProfileDefinition = { body };
 
   if (config.name !== undefined) {
     if (typeof config.name !== "string" || config.name.trim().length === 0) {
@@ -215,12 +219,12 @@ function validateDefinition(config: unknown, body: unknown, requireField = true)
   if (config.thinkingLevel !== undefined) {
     if (
       typeof config.thinkingLevel !== "string" ||
-      !ALLOWED_THINKING_LEVELS.has(config.thinkingLevel as PresetThinkingLevel)
+      !ALLOWED_THINKING_LEVELS.has(config.thinkingLevel as ProfileThinkingLevel)
     ) {
       throw new Error(`unsupported thinkingLevel: ${String(config.thinkingLevel)}`);
     }
 
-    definition.thinkingLevel = config.thinkingLevel as PresetThinkingLevel;
+    definition.thinkingLevel = config.thinkingLevel as ProfileThinkingLevel;
   }
 
   if (config.tools != null) {
@@ -301,20 +305,20 @@ function validateStringList(value: unknown, field: string): string[] {
   return [...value];
 }
 
-function loadPresetPaths(cwd: string): PresetPaths {
+function loadProfilePaths(cwd: string): ProfilePaths {
   const projectDir = join(cwd, CONFIG_DIR_NAME, "agents");
   const globalDir = join(getAgentDir(), "agents");
   const errors: string[] = [];
   let project = new Map<string, string>();
   let global = new Map<string, string>();
   try {
-    project = listMarkdownPresets(projectDir);
+    project = listMarkdownProfiles(projectDir);
   } catch (error) {
     errors.push(`${projectDir}: ${String(error)}`);
   }
 
   try {
-    global = listMarkdownPresets(globalDir);
+    global = listMarkdownProfiles(globalDir);
   } catch (error) {
     errors.push(`${globalDir}: ${String(error)}`);
   }
@@ -322,7 +326,7 @@ function loadPresetPaths(cwd: string): PresetPaths {
   return { project, global, errors };
 }
 
-function listMarkdownPresets(directory: string): Map<string, string> {
+function listMarkdownProfiles(directory: string): Map<string, string> {
   if (!existsSync(directory)) {
     return new Map();
   }
