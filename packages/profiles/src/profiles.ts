@@ -47,18 +47,6 @@ const ALLOWED_THINKING_LEVELS = new Set<ProfileThinkingLevel>([
   "xhigh",
   "max",
 ]);
-const ALLOWED_FIELDS = new Set([
-  "name",
-  "description",
-  "model",
-  "thinkingLevel",
-  "tools",
-  "skills",
-  "prompt",
-]);
-
-const ALLOWED_PROMPT_FIELDS = new Set(["preamble", "docs", "tools", "rules"]);
-
 export function loadProfile(
   name: string,
   ctx: ExtensionContext,
@@ -140,8 +128,6 @@ function validateSnapshot(data: unknown): StoredProfile {
     throw new Error("entry data must be a mapping");
   }
 
-  assertAllowedKeys(data, new Set(["schemaVersion", "name", "definition"]), "snapshot");
-
   if (data.schemaVersion !== 1) {
     throw new Error(`unsupported schemaVersion ${String(data.schemaVersion)}`);
   }
@@ -180,8 +166,6 @@ function validateDefinition(
     throw new Error("frontmatter must be a mapping");
   }
 
-  assertAllowedKeys(config, ALLOWED_FIELDS, "frontmatter");
-
   if (requireField && Object.keys(config).length === 0) {
     throw new Error("frontmatter must contain at least one configuration field");
   }
@@ -193,8 +177,8 @@ function validateDefinition(
   const definition: ProfileDefinition = { body };
 
   if (config.name !== undefined) {
-    if (typeof config.name !== "string" || config.name.trim().length === 0) {
-      throw new Error('"name" must be a nonempty string');
+    if (typeof config.name !== "string") {
+      throw new Error('"name" must be a string');
     }
 
     definition.name = config.name;
@@ -247,8 +231,6 @@ function validatePromptConfig(value: unknown): PromptConfig {
     throw new Error('"prompt" must be a mapping');
   }
 
-  assertAllowedKeys(value, ALLOWED_PROMPT_FIELDS, "prompt");
-
   const prompt: PromptConfig = {};
 
   if (value.preamble !== undefined) {
@@ -278,20 +260,6 @@ function validatePromptConfig(value: unknown): PromptConfig {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function assertAllowedKeys(
-  value: Record<string, unknown>,
-  allowed: Set<string>,
-  where: string,
-): void {
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-
-  if (unknown.length > 0) {
-    throw new Error(
-      `unknown ${where} field${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`,
-    );
-  }
 }
 
 function validateStringList(value: unknown, field: string): string[] {

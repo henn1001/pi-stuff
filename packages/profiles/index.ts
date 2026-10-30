@@ -20,7 +20,10 @@ export default function profileExtension(pi: ExtensionAPI): void {
     }
 
     const name = activeProfile?.definition.name ?? activeProfile?.name;
-    ctx.ui.setStatus("profile", name ? ctx.ui.theme.fg("accent", `profile:${name}`) : undefined);
+    ctx.ui.setStatus(
+      "profile",
+      name !== undefined ? ctx.ui.theme.fg("accent", `profile:${name}`) : undefined,
+    );
   }
 
   pi.registerFlag("profile", {
