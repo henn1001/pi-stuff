@@ -16,8 +16,8 @@ type PromptConfig = {
   rules?: boolean;
 };
 export type PresetDefinition = {
+  name?: string;
   description?: string;
-  provider?: string;
   model?: string;
   thinkingLevel?: PresetThinkingLevel;
   tools?: string[];
@@ -48,8 +48,8 @@ const ALLOWED_THINKING_LEVELS = new Set<PresetThinkingLevel>([
   "max",
 ]);
 const ALLOWED_FIELDS = new Set([
+  "name",
   "description",
-  "provider",
   "model",
   "thinkingLevel",
   "tools",
@@ -64,7 +64,7 @@ export function loadPreset(
   ctx: ExtensionContext,
 ): { sourcePath: string; definition: PresetDefinition } | undefined {
   const paths = loadPresetPaths(ctx.cwd);
-  const projectDir = join(ctx.cwd, CONFIG_DIR_NAME, "presets");
+  const projectDir = join(ctx.cwd, CONFIG_DIR_NAME, "agents");
   const projectScanFailed = paths.errors.some((error) => error.startsWith(`${projectDir}:`));
 
   // Do not fall back to a global preset when an unreadable project directory could shadow it.
@@ -168,17 +168,17 @@ function parseSnapshotDefinition(value: unknown): PresetDefinition {
 
   const { body, ...config } = value;
 
-  return validateDefinition(config, body);
+  return validateDefinition(config, body, false);
 }
 
-function validateDefinition(config: unknown, body: unknown): PresetDefinition {
+function validateDefinition(config: unknown, body: unknown, requireField = true): PresetDefinition {
   if (!isRecord(config)) {
     throw new Error("frontmatter must be a mapping");
   }
 
   assertAllowedKeys(config, ALLOWED_FIELDS, "frontmatter");
 
-  if (Object.keys(config).length === 0) {
+  if (requireField && Object.keys(config).length === 0) {
     throw new Error("frontmatter must contain at least one configuration field");
   }
 
@@ -188,6 +188,14 @@ function validateDefinition(config: unknown, body: unknown): PresetDefinition {
 
   const definition: PresetDefinition = { body };
 
+  if (config.name !== undefined) {
+    if (typeof config.name !== "string" || config.name.trim().length === 0) {
+      throw new Error('"name" must be a nonempty string');
+    }
+
+    definition.name = config.name;
+  }
+
   if (config.description !== undefined) {
     if (typeof config.description !== "string") {
       throw new Error('"description" must be a string');
@@ -196,24 +204,12 @@ function validateDefinition(config: unknown, body: unknown): PresetDefinition {
     definition.description = config.description;
   }
 
-  if (config.provider !== undefined) {
-    if (typeof config.provider !== "string" || config.provider.trim().length === 0) {
-      throw new Error('"provider" must be a nonempty string');
-    }
-
-    definition.provider = config.provider;
-  }
-
   if (config.model !== undefined) {
-    if (typeof config.model !== "string" || config.model.trim().length === 0) {
-      throw new Error('"model" must be a nonempty string');
+    if (typeof config.model !== "string" || !/^[^\s/]+\/[^\s/]\S*$/.test(config.model)) {
+      throw new Error('"model" must be in provider/model-id format');
     }
 
     definition.model = config.model;
-  }
-
-  if ((definition.provider === undefined) !== (definition.model === undefined)) {
-    throw new Error('"provider" and "model" must be supplied together');
   }
 
   if (config.thinkingLevel !== undefined) {
@@ -227,11 +223,11 @@ function validateDefinition(config: unknown, body: unknown): PresetDefinition {
     definition.thinkingLevel = config.thinkingLevel as PresetThinkingLevel;
   }
 
-  if (config.tools !== undefined) {
+  if (config.tools != null) {
     definition.tools = validateStringList(config.tools, "tools");
   }
 
-  if (config.skills !== undefined) {
+  if (config.skills != null) {
     definition.skills = validateStringList(config.skills, "skills");
   }
 
@@ -306,8 +302,8 @@ function validateStringList(value: unknown, field: string): string[] {
 }
 
 function loadPresetPaths(cwd: string): PresetPaths {
-  const projectDir = join(cwd, CONFIG_DIR_NAME, "presets");
-  const globalDir = join(getAgentDir(), "presets");
+  const projectDir = join(cwd, CONFIG_DIR_NAME, "agents");
+  const globalDir = join(getAgentDir(), "agents");
   const errors: string[] = [];
   let project = new Map<string, string>();
   let global = new Map<string, string>();

@@ -1,5 +1,5 @@
 {
-  "name": "presets",
+  "name": "profiles",
   "private": true,
   "type": "module",
   "peerDependencies": {

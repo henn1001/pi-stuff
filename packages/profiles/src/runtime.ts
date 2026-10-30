@@ -132,14 +132,13 @@ export async function activateSelection(
   }
 
   let targetModel: Model<Api> | undefined;
-  if (selection.definition.provider && selection.definition.model) {
-    targetModel = ctx.modelRegistry.find(selection.definition.provider, selection.definition.model);
+  if (selection.definition.model) {
+    const separator = selection.definition.model.indexOf("/");
+    const provider = selection.definition.model.slice(0, separator);
+    const model = selection.definition.model.slice(separator + 1);
+    targetModel = ctx.modelRegistry.find(provider, model);
     if (!targetModel) {
-      return rejectSelection(
-        selection,
-        ctx,
-        `model ${selection.definition.provider}/${selection.definition.model} was not found`,
-      );
+      return rejectSelection(selection, ctx, `model ${selection.definition.model} was not found`);
     }
   } else {
     targetModel = ctx.model;
@@ -358,9 +357,7 @@ function preparePromptOptions(
   if (definition.skills !== undefined) {
     const selectedSkills = new Set(definition.skills);
 
-    prepared.skills = prepared.skills
-      .filter((skill) => selectedSkills.has(skill.name))
-      .map((skill) => ({ ...skill, disableModelInvocation: false }));
+    prepared.skills = prepared.skills.filter((skill) => selectedSkills.has(skill.name));
   }
 
   return prepared;

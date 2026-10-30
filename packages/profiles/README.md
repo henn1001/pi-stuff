@@ -1,16 +1,16 @@
-# Markdown presets
+# Markdown profiles
 
 A Pi extension for session-bound profiles: Markdown defines startup settings and prompt instructions; a branch-local snapshot preserves the accepted profile. There is no runtime preset switch.
 
 ## Usage
 
-Create `~/.pi/agent/presets/plan.md` (global) or `.pi/presets/plan.md` (project-local):
+Create `~/.pi/agent/agents/plan.md` (global) or `.pi/agents/plan.md` (project-local):
 
 ```markdown
 ---
+name: Planning
 description: Investigate without editing files
-provider: openai
-model: gpt-5
+model: openai/gpt-5
 thinkingLevel: high
 tools: [read, bash]
 skills: []
@@ -26,35 +26,37 @@ prompt:
 Investigate the codebase and propose an implementation plan. Do not modify files.
 ```
 
-This template includes every supported option. Set `provider` and `model` to a pair available in your Pi configuration with usable authentication. `skills: []` advertises no skills; replace it with installed skill names or omit it to retain normal visibility. The custom preamble requires a stable loadout during each run (see the limitation below).
+This template includes every supported option. Set `model` to a provider/model pair available in your Pi configuration with usable authentication. `skills: []` advertises no skills; replace it with installed skill names or omit it to retain normal visibility. The custom preamble requires a stable loadout during each run (see the limitation below).
 
 Load the extension and select the filename without `.md`:
 
 ```bash
-pi --extension /path/to/presets/index.ts --preset plan
+pi --extension /path/to/profiles/index.ts --preset plan
 ```
 
-If the extension is already installed in Pi's extensions directory, use `pi --preset plan`. A project preset replaces a same-named global preset entirely. Only direct `.md` children are loaded; `presets.json` is not supported.
+If the extension is already installed in Pi's extensions directory, use `pi --preset plan`. A project preset replaces a same-named global preset entirely. Only direct `.md` children of the `agents` directories are loaded.
 
 - Model, thinking level, and tools are applied during startup, before the first message; the accepted profile is snapshotted immediately. Invalid runtime selections warn and are skipped, with best-effort rollback of staged tools—not atomic application.
-- An active preset displays `preset:plan` at the bottom left in Pi's footer status row, matching the reference extension. It follows the active branch on resume, `/reload`, and `/tree`, and disappears for unprofiled sessions.
+- An active preset displays `preset:Planning` at the bottom left in Pi's footer status row, using its `name` when supplied or the filename otherwise. It follows the active branch on resume, `/reload`, and `/tree`, and disappears for unprofiled sessions.
 - `/new` uses the CLI preset name and rereads its current file. Resume and `/reload` restore the recorded snapshot, not the source file; initial model, thinking, and tool settings are not reapplied. Existing unprofiled sessions cannot acquire a preset retroactively.
 
 ## Frontmatter reference
 
-Each preset requires a YAML frontmatter mapping containing at least one supported field. All fields are individually optional; body-only files and empty frontmatter are invalid. Unknown top-level or nested `prompt` keys are rejected. The filename defines the preset name—there is no `name` field.
+Each preset requires a YAML frontmatter mapping containing at least one supported field. All fields are individually optional; body-only files and empty frontmatter are invalid. Unknown top-level or nested `prompt` keys are rejected. The filename identifies the preset for selection and precedence; `name` is an optional display label.
 
-| Field           | Type / accepted values                                    | Behavior when supplied                                                                                                                                                                                                                                                | When omitted                                                                                                                      |
-| --------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `description`   | String                                                    | Human-readable metadata; not prompt instructions.                                                                                                                                                                                                                     | No description.                                                                                                                   |
-| `provider`      | Nonempty string                                           | Provider identifier for the initial model; requires `model`.                                                                                                                                                                                                          | Both fields absent: no model change.                                                                                              |
-| `model`         | Nonempty string                                           | Model identifier within `provider`; requires `provider`. The pair must resolve to an available model.                                                                                                                                                                 | Both fields absent: no model change.                                                                                              |
-| `thinkingLevel` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | Sets the initial thinking level. Must be supported by the target model (or current model when no model change is requested). Unsupported explicit levels are rejected, not clamped.                                                                                   | No explicit change; a model switch follows Pi's native defaults and capability clamping, otherwise the startup level is retained. |
-| `tools`         | Array of nonempty tool-name strings                       | Replaces the initial active loadout. `[]` activates no tools. Names must be registered and eligible at startup staging; unknown or hidden tools, or a partially accepted loadout, reject the selection.                                                               | Leaves the startup loadout unchanged.                                                                                             |
-| `skills`        | Array of nonempty skill-name strings                      | Advertises only matching skills and enables their model invocation even if normally disabled. `[]` advertises none. Does not remove slash commands. Missing names warn once per profile and are omitted when composing a run; they do not undo startup configuration. | Retains normal skill visibility.                                                                                                  |
-| `prompt`        | Mapping with only the keys below                          | Customizes base-prompt presentation.                                                                                                                                                                                                                                  | Retains Pi's normal base-prompt composition.                                                                                      |
+| Field           | Type / accepted values                                    | Behavior when supplied                                                                                                                                                                                                                      | When omitted                                                                                                                      |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | Nonempty string                                           | Display label in the footer; does not change filename-based selection.                                                                                                                                                                      | Uses the filename.                                                                                                                |
+| `description`   | String                                                    | Human-readable metadata; not prompt instructions.                                                                                                                                                                                           | No description.                                                                                                                   |
+| `model`         | `provider/model-id`                                       | Initial model. The provider and model ID must resolve to an available model; the model ID may contain slashes.                                                                                                                              | No model change.                                                                                                                  |
+| `thinkingLevel` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | Sets the initial thinking level. Must be supported by the target model (or current model when no model change is requested). Unsupported explicit levels are rejected, not clamped.                                                         | No explicit change; a model switch follows Pi's native defaults and capability clamping, otherwise the startup level is retained. |
+| `tools`         | `null` or array of nonempty tool-name strings             | Replaces the initial active loadout. `[]` activates no tools. Names must be registered and eligible at startup staging; unknown or hidden tools, or a partially accepted loadout, reject the selection.                                     | Leaves the startup loadout unchanged.                                                                                             |
+| `skills`        | `null` or array of nonempty skill-name strings            | Limits advertising to matching skills, respecting each skill's `disable-model-invocation`. `[]` advertises none. Does not unload skills or remove slash commands. Missing names warn once per profile and are omitted when composing a run. | Retains normal skill visibility.                                                                                                  |
+| `prompt`        | Mapping with only the keys below                          | Customizes base-prompt presentation.                                                                                                                                                                                                        | Retains Pi's normal base-prompt composition.                                                                                      |
 
-`provider` and `model` must either both be present or both be absent. Model selection requires usable authentication. The switch occurs during startup resource discovery, before Pi validates the model for the first run; failures before extension startup are still outside the preset's control.
+For `tools` and `skills`, `null` (including a YAML key without a value) is equivalent to omission. Nonempty lists may use either flow syntax (`[read, bash]`) or block syntax (`- read` on separate lines).
+
+Model selection requires usable authentication. The switch occurs during startup resource discovery, before Pi validates the model for the first run; failures before extension startup are still outside the preset's control.
 
 ### `prompt` settings
 

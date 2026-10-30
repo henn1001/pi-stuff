@@ -3,7 +3,7 @@
 A Git-installable Pi package containing these extensions:
 
 - `ask-user` — lets the model ask a multiple-choice question.
-- `presets` — session-bound profiles for startup settings and prompt instructions.
+- `profiles` — session-bound profiles for startup settings and prompt instructions.
 - `skill-manager` — browse skills and control automatic model invocation.
 
 Install from Pi with:

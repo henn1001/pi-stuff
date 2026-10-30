@@ -29,7 +29,7 @@
   "pi": {
     "extensions": [
       "./packages/ask-user/index.ts",
-      "./packages/presets/index.ts",
+      "./packages/profiles/index.ts",
       "./packages/skill-manager/index.ts",
       "./packages/crew/index.ts"
     ]

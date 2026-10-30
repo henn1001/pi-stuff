@@ -19,7 +19,7 @@ export default function presetExtension(pi: ExtensionAPI): void {
       return;
     }
 
-    const name = activeProfile?.name;
+    const name = activeProfile?.definition.name ?? activeProfile?.name;
     ctx.ui.setStatus("preset", name ? ctx.ui.theme.fg("accent", `preset:${name}`) : undefined);
   }
 
