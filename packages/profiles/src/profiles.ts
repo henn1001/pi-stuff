@@ -52,7 +52,7 @@ export function loadProfile(
   ctx: ExtensionContext,
 ): { sourcePath: string; definition: ProfileDefinition } | undefined {
   const paths = loadProfilePaths(ctx.cwd);
-  const projectDir = join(ctx.cwd, CONFIG_DIR_NAME, "agents");
+  const projectDir = join(ctx.cwd, CONFIG_DIR_NAME, "profiles");
   const projectScanFailed = paths.errors.some((error) => error.startsWith(`${projectDir}:`));
 
   // Do not fall back to a global profile when an unreadable project directory could shadow it.
@@ -274,8 +274,8 @@ function validateStringList(value: unknown, field: string): string[] {
 }
 
 function loadProfilePaths(cwd: string): ProfilePaths {
-  const projectDir = join(cwd, CONFIG_DIR_NAME, "agents");
-  const globalDir = join(getAgentDir(), "agents");
+  const projectDir = join(cwd, CONFIG_DIR_NAME, "profiles");
+  const globalDir = join(getAgentDir(), "profiles");
   const errors: string[] = [];
   let project = new Map<string, string>();
   let global = new Map<string, string>();

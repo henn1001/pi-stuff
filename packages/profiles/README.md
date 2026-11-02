@@ -4,7 +4,7 @@ A Pi extension for session-bound profiles: Markdown defines startup settings and
 
 ## Usage
 
-Create `~/.pi/agent/agents/plan.md` (global) or `.pi/agents/plan.md` (project-local):
+Create `~/.pi/agent/profiles/plan.md` (global) or `.pi/profiles/plan.md` (project-local):
 
 ```markdown
 ---
@@ -34,7 +34,7 @@ Load the extension and select the filename without `.md`:
 pi --extension /path/to/profiles/index.ts --profile plan
 ```
 
-If the extension is already installed in Pi's extensions directory, use `pi --profile plan`. A project profile replaces a same-named global profile entirely. Only direct `.md` children of the `agents` directories are loaded.
+If the extension is already installed in Pi's extensions directory, use `pi --profile plan`. A project profile replaces a same-named global profile entirely. Only direct `.md` children of the `profiles` directories are loaded.
 
 - Model, thinking level, and tools are applied during startup, before the first message; the accepted profile is snapshotted immediately. Invalid runtime selections warn and are skipped, with best-effort rollback of staged tools—not atomic application.
 - An active profile displays `profile:Planning` at the bottom left in Pi's footer status row, using its `name` when supplied or the filename otherwise. It follows the active branch on resume, `/reload`, and `/tree`, and disappears for unprofiled sessions.
