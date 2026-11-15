@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^1.4.0",
-    "@earendil-works/pi-coding-agent": "^1.4.0",
-    "@earendil-works/pi-tui": "^1.4.0",
+    "@earendil-works/pi-ai": "^1.5.1",
+    "@earendil-works/pi-coding-agent": "^1.5.1",
+    "@earendil-works/pi-tui": "^1.5.1",
     "@types/bun": "^1.4.4",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
@@ -31,7 +31,8 @@
       "./packages/ask-user/index.ts",
       "./packages/profiles/index.ts",
       "./packages/skill-manager/index.ts",
-      "./packages/crew/index.ts"
+      "./packages/crew/index.ts",
+      "./packages/pi-agents/src/index.ts"
     ]
   }
 }

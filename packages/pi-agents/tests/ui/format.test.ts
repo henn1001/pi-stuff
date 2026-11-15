@@ -1,0 +1,505 @@
+import { describe, expect, test } from "bun:test";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import {
+  type AgentInfo,
+  EMPTY_USAGE,
+  type GraphInfo,
+} from "../../src/agents/types.js";
+import { footerSpans, formatFooterSummary } from "../../src/ui/footer.js";
+import {
+  type Colorize,
+  formatAgentLine,
+  formatGraphLine,
+  graphShape,
+  runtime,
+} from "../../src/ui/format.js";
+import { messageCard, messageLine } from "../../src/ui/messages.js";
+import { panelCompare, panelOrder } from "../../src/ui/panel.js";
+import {
+  attachTarget,
+  buildRows,
+  connector,
+  Disclosure,
+  fold,
+  hiddenNote,
+} from "../../src/ui/rows.js";
+
+function agent(overrides: Partial<AgentInfo>): AgentInfo {
+  return {
+    id: "1",
+    name: "reviewer",
+    job: "review",
+    cwd: "/repo",
+    model: { provider: "openai", modelId: "terra" },
+    state: "idle",
+    closed: false,
+    createdAt: 0,
+    stateSince: 0,
+    lastActivityAt: 0,
+    usage: { ...EMPTY_USAGE },
+    activity: {},
+    ...overrides,
+  };
+}
+
+function graph(overrides: Partial<GraphInfo>): GraphInfo {
+  return {
+    id: "10",
+    name: "review",
+    policy: "allSettled",
+    state: "working",
+    closed: false,
+    stopped: false,
+    createdAt: 0,
+    stateSince: 0,
+    nodes: [
+      { agentId: "11", name: "api", inputs: [], end: false },
+      { agentId: "12", name: "tests", inputs: [], end: false },
+      { agentId: "13", name: "merge", inputs: ["11", "12"], end: true },
+    ],
+    usage: { ...EMPTY_USAGE },
+    ...overrides,
+  };
+}
+
+const answered = (agentId: string, name: string, inputs: string[] = []) => ({
+  agentId,
+  name,
+  inputs,
+  end: false,
+  outcome: {
+    kind: "answered" as const,
+    result: { agentId, name, entryId: 1, text: "ok", stopReason: "stop" },
+  },
+});
+
+describe("formatting", () => {
+  test("agent lines carry state, model, elapsed time, usage, and activity", () => {
+    const line = formatAgentLine(
+      agent({
+        state: "working",
+        profile: "explorer",
+        usage: { ...EMPTY_USAGE, input: 15_000, output: 500, cost: 0.04 },
+        activity: { tool: "grep" },
+        stateSince: 0,
+        lastActivityAt: 90_000,
+      }),
+      92_000,
+    );
+    expect(line).toBe(
+      "◉ reviewer explorer terra 1m32s 15.5k $0.040 Using grep",
+    );
+  });
+
+  test("stalled work and failed compactions show instead of silence", () => {
+    expect(
+      formatAgentLine(
+        agent({
+          state: "working",
+          stalled: true,
+          compactionFailure: "summary refused",
+          lastActivityAt: 0,
+        }),
+        5 * 60_000,
+      ),
+    ).toBe(
+      "◉ reviewer terra 5m00s stalled: needs another pi-agents version compaction failed",
+    );
+  });
+
+  test("settled agents show no elapsed time", () => {
+    expect(formatAgentLine(agent({ state: "idle" }), 5_000)).toBe(
+      "● reviewer terra",
+    );
+  });
+
+  test("queued results show ◐ in the accent color with a note", () => {
+    const color = (name: string, text: string) => `<${name}>${text}`;
+    expect(
+      formatAgentLine(agent({ state: "idle", queued: true }), 5_000, color),
+    ).toBe("<accent>◐ reviewer <dim>terra <dim>result queued");
+    expect(formatAgentLine(agent({ state: "idle" }), 5_000, color)).toBe(
+      "<success>● reviewer <dim>terra",
+    );
+    expect(
+      formatGraphLine(
+        graph({
+          state: "idle",
+          queued: true,
+          nodes: [answered("11", "api"), answered("12", "tests")],
+        }),
+        0,
+        color,
+      ),
+    ).toBe("<accent>◐ review <dim>graph 2/2 <dim>result queued");
+  });
+
+  test("silent working agents show a stall hint", () => {
+    const line = formatAgentLine(
+      agent({ state: "working", lastActivityAt: 0 }),
+      120_000,
+    );
+    expect(line).toContain("no activity for 2m00s");
+  });
+
+  test("the clock stops once an agent or graph finishes", () => {
+    const times = { createdAt: 1_000, stateSince: 61_000 };
+    expect(runtime({ ...times, state: "working" }, 600_000)).toBe(599_000);
+    expect(runtime({ ...times, state: "idle" }, 600_000)).toBe(60_000);
+    expect(runtime({ ...times, state: "interrupted" }, 900_000)).toBe(60_000);
+    expect(runtime({ ...times, state: "waiting" }, 600_000)).toBe(599_000);
+    // The durable end wins over when this process saw the state change.
+    expect(runtime({ ...times, state: "idle", endedAt: 31_000 }, 600_000)).toBe(
+      30_000,
+    );
+  });
+
+  test("panel order puts working agents first, newest first", () => {
+    const ordered = panelOrder([
+      agent({ id: "a", name: "a", state: "idle", createdAt: 3 }),
+      agent({ id: "b", name: "b", state: "working", createdAt: 1 }),
+      agent({ id: "c", name: "c", state: "working", createdAt: 2 }),
+      agent({ id: "d", name: "d", state: "failed", createdAt: 0 }),
+    ]);
+    expect(ordered.map((info) => info.name)).toEqual(["c", "b", "d", "a"]);
+  });
+
+  test("graph lines carry progress, elapsed time, usage, and failures", () => {
+    expect(
+      formatGraphLine(
+        graph({
+          nodes: [
+            answered("11", "api"),
+            { agentId: "12", name: "tests", inputs: [], end: true },
+          ],
+          usage: { ...EMPTY_USAGE, input: 31_500 },
+        }),
+        92_000,
+      ),
+    ).toBe("◉ review graph 1/2 1m32s 31.5k");
+    expect(
+      formatGraphLine(
+        graph({
+          state: "failed",
+          nodes: [
+            answered("11", "api"),
+            {
+              agentId: "12",
+              name: "tests",
+              inputs: [],
+              end: false,
+              outcome: { kind: "failed", reason: "boom" },
+            },
+            {
+              agentId: "13",
+              name: "merge",
+              inputs: ["11", "12"],
+              end: true,
+              outcome: { kind: "skipped" },
+            },
+          ],
+        }),
+        92_000,
+      ),
+    ).toBe("⊗ review graph 3/3 1 failed, 1 skipped");
+    expect(
+      formatGraphLine(graph({ state: "interrupted", stopped: true }), 0),
+    ).toBe("⊘ review graph 0/3 stopped");
+    expect(graphShape(graph({}))).toBe("{api, tests} → merge");
+  });
+
+  test("waiting agents show their inputs", () => {
+    expect(
+      formatAgentLine(
+        agent({ name: "merge", state: "waiting" }),
+        0,
+        undefined,
+        ["api", "tests"],
+      ),
+    ).toBe("○ merge after api, tests terra");
+  });
+
+  test("rows draw a graph's agents as a tree and fold finished graphs", () => {
+    const agents = [
+      agent({ id: "11", name: "api", graph: "10", createdAt: 5 }),
+      agent({ id: "12", name: "tests", graph: "10", createdAt: 5 }),
+      agent({ id: "13", name: "merge", graph: "10", createdAt: 5 }),
+      agent({ id: "1", name: "solo", state: "idle", createdAt: 9 }),
+    ];
+    const source = (info: GraphInfo) => ({
+      agents,
+      graphs: [info],
+      agent: (id: string) => agents.find((each) => each.id === id),
+    });
+    const working = buildRows(
+      source(graph({ createdAt: 5 })),
+      panelCompare,
+      () => true,
+    );
+    expect(working.map((row) => row.key)).toEqual([
+      "graph:10",
+      "agent:11",
+      "agent:12",
+      "agent:13",
+      "agent:1",
+    ]);
+    expect(working.map(connector)).toEqual(["", "├─ ", "├─ ", "└─ ", ""]);
+    const merge = working[3];
+    expect(merge?.kind === "agent" && merge.inputs).toEqual(["api", "tests"]);
+    const first = working[0];
+    expect(first && attachTarget(first)).toBe("11");
+    const folded = buildRows(
+      source(graph({ state: "idle", createdAt: 5 })),
+      panelCompare,
+      (info) => info.state === "working",
+    );
+    expect(folded.map((row) => row.key)).toEqual(["agent:1", "graph:10"]);
+  });
+
+  test("spawned agents draw under the agent that spawned them", () => {
+    const agents = [
+      agent({ id: "1", name: "lead", graph: "10", state: "working" }),
+      agent({ id: "2", name: "other", graph: "10" }),
+      agent({ id: "3", name: "lead.a", graph: "20" }),
+      agent({ id: "4", name: "lead.b", graph: "20" }),
+      agent({ id: "5", name: "solo", createdAt: 9 }),
+      agent({ id: "6", name: "solo.x", graph: "30" }),
+    ];
+    const top = graph({
+      id: "10",
+      nodes: [
+        { agentId: "1", name: "lead", inputs: [], end: true },
+        { agentId: "2", name: "other", inputs: [], end: true },
+      ],
+    });
+    const helpers = graph({
+      id: "20",
+      name: "lead.helpers",
+      owner: "1",
+      nodes: [
+        { agentId: "3", name: "lead.a", inputs: [], end: false },
+        { agentId: "4", name: "lead.b", inputs: ["3"], end: true },
+      ],
+    });
+    // A group of one agent shows as the agent.
+    const solo = graph({
+      id: "30",
+      name: "solo.x",
+      owner: "5",
+      single: true,
+      createdAt: 9,
+      nodes: [{ agentId: "6", name: "solo.x", inputs: [], end: true }],
+    });
+    const rows = buildRows(
+      {
+        agents,
+        graphs: [top, helpers, solo],
+        agent: (id) => agents.find((each) => each.id === id),
+      },
+      panelCompare,
+      () => true,
+    );
+    expect(rows.map((row) => `${connector(row)}${row.key}`)).toEqual([
+      "graph:10",
+      "├─ agent:1",
+      "│  └─ graph:20",
+      "│     ├─ agent:3",
+      "│     └─ agent:4",
+      "└─ agent:2",
+      "agent:5",
+      "└─ agent:6",
+    ]);
+  });
+
+  test("space folds graphs and spawned agents, from any row below them", () => {
+    const agents = [
+      agent({ id: "1", name: "lead", graph: "10", state: "working" }),
+      agent({ id: "2", name: "other", graph: "10" }),
+      agent({ id: "3", name: "lead.a", graph: "20" }),
+      agent({ id: "4", name: "lead.b", graph: "20" }),
+    ];
+    const graphs = [
+      graph({
+        id: "10",
+        nodes: [
+          { agentId: "1", name: "lead", inputs: [], end: true },
+          { agentId: "2", name: "other", inputs: [], end: true },
+        ],
+      }),
+      graph({
+        id: "20",
+        name: "lead.helpers",
+        owner: "1",
+        nodes: [
+          { agentId: "3", name: "lead.a", inputs: [], end: true },
+          { agentId: "4", name: "lead.b", inputs: [], end: true },
+        ],
+      }),
+    ];
+    const disclosure = new Disclosure();
+    const rows = () =>
+      buildRows(
+        {
+          agents,
+          graphs,
+          agent: (id) => agents.find((each) => each.id === id),
+        },
+        panelCompare,
+        () => true,
+        disclosure,
+      );
+    const keys = () => rows().map((row) => row.key);
+    const row = (key: string) => {
+      const found = rows().find((each) => each.key === key);
+      if (!found) throw new Error(`no row ${key}`);
+      return found;
+    };
+    expect(row("graph:10").below).toBe(4);
+    expect(row("agent:1").below).toBe(2);
+
+    // Space on a spawned agent folds its group and selects it.
+    expect(fold(row("agent:3"), disclosure)).toBe("graph:20");
+    expect(keys()).toEqual(["graph:10", "agent:1", "graph:20", "agent:2"]);
+    expect(hiddenNote(row("graph:20"))).toBe("2 hidden");
+
+    // Space on a folded row unfolds it.
+    expect(fold(row("graph:20"), disclosure)).toBe("graph:20");
+    expect(keys()).toHaveLength(6);
+
+    // An agent folds the agents it spawned; a graph, everything below it.
+    fold(row("agent:1"), disclosure);
+    expect(keys()).toEqual(["graph:10", "agent:1", "agent:2"]);
+    fold(row("graph:10"), disclosure);
+    expect(keys()).toEqual(["graph:10"]);
+    expect(hiddenNote(row("graph:10"))).toBe("4 hidden");
+
+    // The user's choice wins over the default, also for finished graphs.
+    const finished = buildRows(
+      { agents, graphs, agent: (id) => agents.find((each) => each.id === id) },
+      panelCompare,
+      () => false,
+      disclosure,
+    );
+    expect(finished.map((each) => each.key)).toEqual(["graph:10"]);
+    fold(row("graph:10"), disclosure);
+    expect(
+      buildRows(
+        {
+          agents,
+          graphs,
+          agent: (id) => agents.find((each) => each.id === id),
+        },
+        panelCompare,
+        () => false,
+        disclosure,
+      ).map((each) => each.key),
+    ).toEqual(["graph:10", "agent:1", "agent:2"]);
+  });
+
+  test("spawned agents drop their spawner's name below it", () => {
+    const agents = [
+      agent({ id: "1", name: "lead", state: "working" }),
+      agent({ id: "3", name: "lead.a", graph: "20" }),
+      agent({ id: "4", name: "lead.merge", graph: "20" }),
+    ];
+    const helpers = graph({
+      id: "20",
+      name: "lead.helpers",
+      owner: "1",
+      nodes: [
+        { agentId: "3", name: "lead.a", inputs: [], end: false },
+        { agentId: "4", name: "lead.merge", inputs: ["3"], end: true },
+      ],
+    });
+    const labels = (shown: typeof agents) =>
+      buildRows(
+        {
+          agents: shown,
+          graphs: [helpers],
+          agent: (id) => agents.find((each) => each.id === id),
+        },
+        panelCompare,
+        () => true,
+      ).map((row) =>
+        row.kind === "agent" && row.inputs.length > 0
+          ? `${row.label} ← ${row.inputs.join(", ")}`
+          : row.label,
+      );
+    expect(labels(agents)).toEqual(["lead", "helpers", "a", "merge ← a"]);
+    // Without its agent, the graph keeps the name that says whose it is.
+    expect(labels(agents.slice(1))).toEqual(["lead.helpers", "a", "merge ← a"]);
+    expect(
+      formatAgentLine(
+        agent({
+          name: "lead",
+          state: "working",
+          lastActivityAt: 1_000,
+          activity: {
+            spawning: { graph: "lead.helpers", done: 1, total: 2 },
+          },
+        }),
+        2_000,
+      ),
+    ).toBe("◉ lead terra 2s spawned helpers 1/2");
+  });
+
+  test("footer counts statuses, closed agents included", () => {
+    expect(formatFooterSummary([])).toBe("");
+    expect(
+      formatFooterSummary([
+        agent({ state: "working" }),
+        agent({ state: "working", closed: true }),
+        agent({ state: "idle" }),
+        agent({ state: "idle", queued: true }),
+        agent({ state: "idle", closed: true }),
+        agent({ state: "idle", queued: true, closed: true }),
+        agent({ state: "failed", closed: true }),
+      ]),
+    ).toBe("2◉ 2◐ 1● 2◌");
+    expect(footerSpans([agent({ state: "failed" })])).toEqual([
+      { text: "1" },
+      { text: "⊗", color: "error" },
+    ]);
+  });
+
+  test("message lines show who, the text, and its age; color is status", () => {
+    const tagged: Colorize = (name, text) => `<${name}>${text}</>`;
+    const style = { color: tagged, bold: (text: string) => text };
+    const queued = {
+      from: "scout",
+      to: "notes",
+      text: "bun.lock is 412 KB\nmore",
+      status: "queued" as const,
+      age: "3s",
+    };
+    expect(messageLine(queued, 60, style)).toBe(
+      "scout<dim> → </>notes <dim>bun.lock is 412 KB …</><dim> 3s</>",
+    );
+    // Delivered reads normal, dropped red.
+    expect(
+      messageLine({ ...queued, status: "dropped", age: "" }, 60, style),
+    ).toContain("<error>bun.lock is 412 KB …</>");
+  });
+
+  test("a card is the line, and expanded, the whole text; lines fit", () => {
+    const theme = {
+      fg: (_name: string, text: string) => text,
+      bg: (_name: string, text: string) => text,
+      bold: (text: string) => text,
+    };
+    const message = { from: "beta", to: "gamma", text: "first\nsecond" };
+    const card = (expanded: boolean) =>
+      messageCard(message, expanded, theme as never)
+        .render(40)
+        .map((line) => line.trimEnd())
+        .filter(Boolean);
+    // More lines follow, so the line says so.
+    expect(card(false)).toEqual([" beta → gamma first …"]);
+    expect(card(true)).toEqual([" beta → gamma", "   first", "   second"]);
+    // Names too long for the width cut the row's end, never overflow it.
+    const long = { from: "a".repeat(30), to: "b".repeat(30), text: "hi\nyo" };
+    for (const expanded of [false, true])
+      for (const line of messageCard(long, expanded, theme as never).render(40))
+        expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+  });
+});

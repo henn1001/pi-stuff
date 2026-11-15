@@ -11,5 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["bun"]
   },
-  "include": ["packages/**/*.ts"]
+  "include": ["packages/**/*.ts"],
+  "exclude": ["packages/pi-agents/**"]
 }

@@ -9,5 +9,6 @@
   },
   "env": {
     "builtin": true
-  }
+  },
+  "ignorePatterns": [".ref/**", "packages/pi-agents/**"]
 }

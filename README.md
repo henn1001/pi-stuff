@@ -3,6 +3,7 @@
 A Git-installable Pi package containing these extensions:
 
 - `ask-user` — lets the model ask a multiple-choice question.
+- `pi-agents` — durable, named agents and graphs (fork of [`mavam/pi-agents`](https://github.com/mavam/pi-agents)).
 - `profiles` — session-bound profiles for startup settings and prompt instructions.
 - `skill-manager` — browse skills and control automatic model invocation.
 

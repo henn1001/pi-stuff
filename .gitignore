@@ -32,3 +32,6 @@ jspm_packages/
 .env
 .env.*
 !.env.example
+
+# Upstream reference clones
+/.ref/
