@@ -36,9 +36,21 @@ pi --extension /path/to/profiles/index.ts --profile plan
 
 If the extension is already installed in Pi's extensions directory, use `pi --profile plan`. A project profile replaces a same-named global profile entirely. Only direct `.md` children of the `profiles` directories are loaded.
 
+To choose a profile automatically for a project, set `profiles.default` in `.pi/settings.json` to the profile filename without `.md`:
+
+```json
+{
+  "profiles": {
+    "default": "plan"
+  }
+}
+```
+
+This extension-owned setting can also go in `~/.pi/agent/settings.json` for a user-wide default; a project value overrides it. `--profile` takes precedence over the setting. The default is used for fresh startup and `/new`; a branch snapshot remains authoritative on resume and `/reload`.
+
 - Model, thinking level, and tools are applied during startup, before the first message; the accepted profile is snapshotted immediately. Invalid runtime selections warn and are skipped, with best-effort rollback of staged tools—not atomic application.
 - An active profile displays `profile:Planning` at the bottom left in Pi's footer status row, using its `name` when supplied or the filename otherwise. It follows the active branch on resume, `/reload`, and `/tree`, and disappears for unprofiled sessions.
-- `/new` uses the CLI profile name and rereads its current file. Resume and `/reload` restore the recorded snapshot, not the source file; initial model, thinking, and tool settings are not reapplied. Existing unprofiled sessions cannot acquire a profile retroactively.
+- `/new` uses the CLI profile name when supplied, otherwise `profiles.default`, and rereads the selected file. Resume and `/reload` restore the recorded snapshot, not the source file; initial model, thinking, and tool settings are not reapplied. Existing unprofiled sessions cannot acquire a profile retroactively.
 
 ## Frontmatter reference
 

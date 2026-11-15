@@ -52,34 +52,68 @@ export function selectProfile(
     return;
   }
 
-  if (typeof profileFlag !== "string" || !profileFlag) {
+  if (reason !== "startup" && reason !== "new") {
     return;
   }
 
-  if (reason !== "startup" && reason !== "new") {
+  const name =
+    typeof profileFlag === "string" && profileFlag ? profileFlag : getDefaultProfile(pi, ctx);
+  if (!name) {
     return;
   }
 
   if (!branchCanSelectProfile(ctx)) {
     ctx.ui.notify(
-      `Cannot attach profile "${profileFlag}" to this existing unprofiled session; no profile customization was applied. Use /new or start a new session with --profile.`,
+      `Cannot attach profile "${name}" to this existing unprofiled session; no profile customization was applied. Use /new or start a new session with --profile.`,
       "warning",
     );
     return;
   }
 
-  const profile = loadProfile(profileFlag, ctx);
+  const profile = loadProfile(name, ctx);
   if (!profile) {
     return;
   }
 
   return {
     pi,
-    name: profileFlag,
+    name,
     ...profile,
     stagingAttempted: false,
     stagingComplete: false,
   };
+}
+
+function getDefaultProfile(pi: ExtensionAPI, ctx: ExtensionContext): string | undefined {
+  const settings = pi.getSettings() as unknown as { profiles?: unknown };
+  const profiles = settings.profiles;
+
+  if (profiles === undefined) {
+    return;
+  }
+
+  if (typeof profiles !== "object" || profiles === null || Array.isArray(profiles)) {
+    ctx.ui.notify(
+      'Invalid setting "profiles": expected an object; ignoring the default profile.',
+      "warning",
+    );
+    return;
+  }
+
+  const name = (profiles as Record<string, unknown>).default;
+  if (name === undefined) {
+    return;
+  }
+
+  if (typeof name !== "string" || !name.trim()) {
+    ctx.ui.notify(
+      'Invalid setting "profiles.default": expected a nonempty profile name; ignoring it.',
+      "warning",
+    );
+    return;
+  }
+
+  return name;
 }
 
 // Stage tools during discovery, before Pi builds the first run's prompt.
