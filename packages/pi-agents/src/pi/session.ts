@@ -47,6 +47,7 @@ import { openStorage, type Storage } from "../host/storage.js";
 import { readWorkingLimit } from "../host/working.js";
 import { captureAgentState, discoverAgentHooks } from "./hooks.js";
 import { notify } from "./notify.js";
+import { buildProfilesPrompt, profileCatalog } from "./prompt.js";
 import { isTrusted, resolveHelper } from "./spawn.js";
 
 function sessionsRoot(): string {
@@ -255,7 +256,19 @@ export class SessionHost {
       const extensions = createAgentExtensions({
         ...(limit === undefined ? {} : { maxWorkingAgents: limit }),
         hooks: beforeRequestHooks(sessionId, this.hooks),
-        prompt: { trusted: () => this.trusted, skills: this.skills.get },
+        prompt: {
+          trusted: () => this.trusted,
+          skills: this.skills.get,
+          profiles: async (cwd) => {
+            const { profiles } = await profileCatalog(
+              cwd,
+              this.trusted,
+              modelRegistry.getAvailable(),
+              this.skills.get,
+            );
+            return buildProfilesPrompt(profiles);
+          },
+        },
         resolveHelper: (request, defaults) => {
           const current = this.ctx;
           if (!current) throw new AgentError("Pi isn't ready for helpers yet");

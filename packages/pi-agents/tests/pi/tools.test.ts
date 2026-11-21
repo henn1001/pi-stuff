@@ -229,6 +229,7 @@ describe("tool exposure", () => {
         onError: (error) => errors.push(error),
       });
       expect(errors).toEqual([]);
+      await runtime.session.prompt("/agents enable");
       expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
       const callable = runtime.session.getCallableToolNames();
       expect(callable).not.toContain("agent_wait");
@@ -246,9 +247,9 @@ describe("tool exposure", () => {
 
   test("agent_spawn shows how to list a single agent's fields", () => {
     const prepare = tools().get("agent_spawn")?.prepareArguments;
-    const lead = { name: "lead", job: "review", spawn: true };
+    const lead = { name: "lead", job: "review" };
     expect(() => prepare?.(lead)).toThrow(
-      'Move job, spawn into an entry of agents. Arguments are always an agents array, also for a single agent: {"agents": [{"name": "lead"',
+      'Move job into an entry of agents. Arguments are always an agents array, also for a single agent: {"agents": [{"name": "lead"',
     );
     expect(prepare?.({ agents: [lead] })).toEqual({ agents: [lead] });
   });
@@ -643,14 +644,11 @@ describe("call results", () => {
   test("a spawn of one agent reads as that agent", async () => {
     const run = await gated();
     const spawn = tools().get("agent_spawn");
-    const args = { agents: [{ name: "scout", job: "Look.", spawn: true }] };
+    const args = { agents: [{ name: "scout", job: "Look." }] };
     const started = await run("agent_spawn", args);
     expect(started.text).toBe("Started scout.");
     // The call names the agent, which its result doesn't repeat.
-    expect(drawFrame(spawn, args, started)).toEqual([
-      "spawn scout spawn=true",
-      "  Look.",
-    ]);
+    expect(drawFrame(spawn, args, started)).toEqual(["spawn scout", "  Look."]);
     // Its result reads as its answer, without a graph.
     const waited = await run("agent_wait", { names: ["scout"] });
     expect(waited.text).toBe("scout answered:\n\ndone: Look.");

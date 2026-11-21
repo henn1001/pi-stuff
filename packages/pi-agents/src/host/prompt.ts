@@ -47,6 +47,8 @@ export interface PromptOptions {
    * messaging snippets and rules for that tool.
    */
   toolPrompt?: (tool: ToolRegistration) => ToolPromptContribution | undefined;
+  /** Available profiles and selection guidance for agents that may spawn. */
+  profiles?: (cwd: string) => Promise<string>;
 }
 
 type ContextFiles = Array<{ path: string; content: string }>;
@@ -172,6 +174,18 @@ export function createPromptExtension(options: PromptOptions): Extension {
       ),
       section("rules", (input) =>
         buildRules(input.agent.tools, options.toolPrompt),
+      ),
+      section(
+        "agent_profiles",
+        (input) =>
+          input.agent.tools.some(
+            (tool) =>
+              tool.name === SPAWN_TOOL &&
+              options.toolPrompt?.(tool) === undefined,
+          )
+            ? options.profiles?.(cwdOf(input))
+            : undefined,
+        { tag: false },
       ),
       section("project_context", (input) => {
         const files = contextFiles(cwdOf(input));

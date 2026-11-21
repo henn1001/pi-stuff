@@ -8,17 +8,18 @@ import {
   type GraphInfo,
   type GraphNode,
 } from "../../src/agents/types.js";
-import {
-  agentDetail,
-  agentHeader,
-  graphDetail,
-} from "../../src/pi/commands.js";
 import { plainColorize } from "../../src/ui/format.js";
 import {
   type DetailLine,
   paneLayout,
   renderDetail,
 } from "../../src/ui/frame.js";
+
+import {
+  agentDetail,
+  agentHeader,
+  graphDetail,
+} from "../../src/ui/workspace.js";
 
 beforeAll(() => initTheme("dark"));
 

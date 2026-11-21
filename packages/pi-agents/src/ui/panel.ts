@@ -174,6 +174,8 @@ export class AgentPanel {
   private targets: LineTarget[] = [];
   /** Attaches to an agent, by ID; the host wires it to focus. */
   onAttach: ((agentId: string) => void) | undefined;
+  /** Opens the full agent overview from the summary. */
+  onBrowse: (() => void) | undefined;
   /** The messages the latest focused frame showed, which ↑↓ reach. */
   private shownMessages: MessageInfo[] = [];
 
@@ -570,7 +572,8 @@ export class AgentPanel {
   private click(line: number, column: number): boolean {
     const target = this.targets[line];
     if (target?.focus) {
-      this.setFocused(true);
+      if (!this.onBrowse) return false;
+      this.onBrowse();
       return true;
     }
     const agentId =

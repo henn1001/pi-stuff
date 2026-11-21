@@ -177,16 +177,14 @@ export async function jsonlStorage(directory: string): Promise<Storage> {
   return openNodeJsonlStorage(directory, BACKGROUND_CONTEXT);
 }
 
-/** Spawned agents inherit their agent's settings and take only a tool
- * allowlist and whether they may spawn; the session host resolves
- * profiles, models, and skills. */
+/** Test resolver: inherit the spawner's settings; named profiles exercise spawn and tool restrictions. */
 export const inheritHelper: HelperResolver = async (request, defaults) => ({
   job: request.job,
   cwd: defaults.cwd,
   ...(defaults.model ? { model: defaults.model } : {}),
   ...(defaults.thinking ? { thinking: defaults.thinking } : {}),
-  ...(request.tools ? { tools: request.tools } : {}),
-  ...(request.spawn ? { spawn: true } : {}),
+  ...(request.profile === "bash" ? { tools: ["bash"] } : {}),
+  ...(request.profile === "spawner" ? { spawn: true } : {}),
 });
 
 /**

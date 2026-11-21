@@ -9,6 +9,7 @@ import {
   resultContent,
 } from "../../src/pi/messages.js";
 import {
+  buildProfilesPrompt,
   buildSystemPromptAppendix,
   guidance,
   profileCatalog,
@@ -50,65 +51,18 @@ describe("system prompt appendix", () => {
     ]);
     const appendix = buildSystemPromptAppendix(profiles);
     expect(appendix).toBe(
-      [
-        guidance(),
-        "<agent_profiles>",
-        '  <profile name="scout" thinking="low">Finds code</profile>',
-        "</agent_profiles>",
-      ].join("\n"),
+      [guidance(), buildProfilesPrompt(profiles)].join("\n"),
     );
-    expect(
-      buildSystemPromptAppendix([], [
-        {
-          model: {
-            provider: "anthropic",
-            id: "claude-sonnet-5-5",
-            name: "Claude Sonnet 5.5",
-            contextWindow: 1_000_000,
-            cost: { input: 2, output: 10 },
-          },
-        },
-        {
-          model: { provider: "openai-codex", id: "gpt-6.1-sol" },
-          thinkingLevel: "high",
-        },
-      ] as never),
-    ).toBe(
-      [
-        guidance(),
-        '<agent_models note="cost in USD per million input/output tokens">',
-        '  <model id="anthropic/claude-sonnet-5-5" name="Claude Sonnet 5.5" context="1M" cost="2/10"/>',
-        '  <model id="openai-codex/gpt-6.1-sol" thinking="high"/>',
-        "</agent_models>",
-      ].join("\n"),
-    );
-    expect(buildSystemPromptAppendix([])).toBe(guidance());
   });
 
   test("a single-shot run waits for the results it needs", () => {
     expect(guidance()).toContain("end your turn");
     expect(guidance()).not.toContain("This run ends with your answer");
-    expect(buildSystemPromptAppendix([], [], true)).toBe(guidance(true));
+    expect(buildSystemPromptAppendix([], true)).toContain(guidance(true));
     expect(guidance(true)).toContain(
       "call agent_wait for the results you need before you answer",
     );
     expect(guidance(true)).not.toContain("end your turn");
-  });
-
-  test("profiles name their skills", () => {
-    const appendix = buildSystemPromptAppendix([
-      {
-        name: "reviewer",
-        description: "Reviews diffs",
-        skills: ["code-review", "unslop"],
-        instructions: "",
-        source: "user",
-        filePath: "/reviewer.md",
-      },
-    ]);
-    expect(appendix).toContain(
-      '<profile name="reviewer" skills="code-review,unslop">Reviews diffs</profile>',
-    );
   });
 });
 

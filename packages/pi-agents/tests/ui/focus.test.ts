@@ -63,15 +63,15 @@ function setup(state: {
 }
 
 describe("focus", () => {
-  test("← focuses the panel when it shows agents", () => {
+  test("← opens the overview when the summary shows agents", () => {
     const { press, focused, browsed } = setup({
       rows: true,
       agents: 2,
       suppressed: false,
     });
     expect(press(LEFT)).toEqual({ consume: true });
-    expect(focused).toEqual([true]);
-    expect(browsed).toEqual([]);
+    expect(focused).toEqual([]);
+    expect(browsed).toEqual([undefined]);
   });
 
   test.each([
@@ -107,17 +107,16 @@ describe("focus", () => {
     const press = (input: string) => {
       if (!ui.press(input)?.consume) editor.handleInput(input);
     };
-    press(LEFT);
     press(data);
     expect(editor.getText()).toBe(text);
-    expect(ui.focused).toEqual([true, false]);
+    expect(ui.press(LEFT)).toBeUndefined();
+    expect(ui.focused).toEqual([]);
     press("\r");
     expect(submitted).toEqual([text]);
   });
 
   test("terminal reports and key releases leave panel focus alone", () => {
     const ui = setup({ rows: true, agents: 2, suppressed: false });
-    ui.press(LEFT);
     for (const data of [
       "\u001b[I",
       "\u001b[O",
@@ -126,7 +125,7 @@ describe("focus", () => {
     ]) {
       expect(ui.press(data)).toBeUndefined();
     }
-    expect(ui.focused).toEqual([true]);
+    expect(ui.focused).toEqual([]);
   });
 
   test("← opens /agents when the panel is empty", () => {

@@ -210,7 +210,7 @@ describe("spawning", () => {
     const middle = {
       name: "mid",
       job: spawnJob([leaf], true),
-      spawn: true,
+      profile: "spawner",
     };
     await service.spawnGraph({ agents: [lead(spawnJob([middle], true))] });
     const delivery = await resultOf(service, "lead");
@@ -220,8 +220,8 @@ describe("spawning", () => {
 
   test("agents at the deepest level can't spawn", async () => {
     const service = await open();
-    const deep = { name: "deep", job: "dig", spawn: true };
-    const middle = { name: "mid", job: spawnJob([deep]), spawn: true };
+    const deep = { name: "deep", job: "dig", profile: "spawner" };
+    const middle = { name: "mid", job: spawnJob([deep]), profile: "spawner" };
     await service.spawnGraph({ agents: [lead(spawnJob([middle]))] });
     await resultOf(service, "lead");
     expect(
@@ -291,7 +291,9 @@ describe("spawning", () => {
   test("a stop reaches agents below, also through groups that finished", async () => {
     const service = await open();
     await service.spawnGraph({
-      agents: [lead(spawnJob([{ name: "child", job: "look", spawn: true }]))],
+      agents: [
+        lead(spawnJob([{ name: "child", job: "look", profile: "spawner" }])),
+      ],
     });
     await resultOf(service, "lead");
     await service.send(
@@ -466,7 +468,7 @@ describe("spawning", () => {
     const service = await open();
     await service.spawnGraph({
       agents: [
-        lead(spawnJob([{ name: "a", job: "a", tools: ["bash"] }]), {
+        lead(spawnJob([{ name: "a", job: "a", profile: "bash" }]), {
           tools: ["read"],
         }),
       ],

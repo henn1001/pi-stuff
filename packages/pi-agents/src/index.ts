@@ -8,6 +8,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { createActivation } from "./pi/activation.js";
 import { registerCommands } from "./pi/commands.js";
 import { AgentStatePublisher } from "./pi/events.js";
 import { registerMessageRenderers } from "./pi/messages.js";
@@ -25,8 +26,15 @@ import { FocusController } from "./ui/focus.js";
 import { FancyFooterReporter } from "./ui/footer.js";
 import { statusOf } from "./ui/format.js";
 import { AgentPanel } from "./ui/panel.js";
+import { createWorkspace } from "./ui/workspace.js";
 
 export default function agentExtension(pi: ExtensionAPI): void {
+  pi.registerFlag("agents", {
+    description: "Enable pi-agents for the session",
+    type: "boolean",
+    default: false,
+  });
+
   const parent = new PiParent(pi);
   const host = new SessionHost(parent, { events: pi.events });
   const state = new AgentStatePublisher(
@@ -60,6 +68,7 @@ export default function agentExtension(pi: ExtensionAPI): void {
 
   // A click on a panel row attaches, like ⏎.
   panel.onAttach = (agentId) => focus.attachTo(agentId);
+  panel.onBrowse = () => focus.focusPanel();
   // While the user is attached to an agent, nothing wakes the parent.
   parent.setBlocked(() => focus.isPaneOpen());
   focus.onPaneClosed = (ctx) => {
@@ -82,13 +91,14 @@ export default function agentExtension(pi: ExtensionAPI): void {
     if (event.streamingBehavior === "steer") parent.steer();
     return { action: "continue" };
   });
-  registerAgentTools(pi, host);
   parent.listen();
-  registerCommands(pi, { host, panel, focus });
-  pi.registerShortcut("ctrl+q", {
-    description: "Focus the pi-agents panel",
-    handler: (ctx) => focus.focusPanel(ctx),
-  });
+  const activation = createActivation(
+    pi,
+    (ctx) => start(ctx),
+    () => registerAgentTools(pi, host),
+  );
+  const workspace = createWorkspace({ host, panel, focus });
+  registerCommands(pi, { activation, host, focus, workspace });
 
   const track = (ctx: ExtensionContext): void => {
     host.setContext(ctx);
@@ -98,6 +108,7 @@ export default function agentExtension(pi: ExtensionAPI): void {
   // Profile problems are reported once per session, not on every turn.
   const reported = new Set<string>();
   pi.on("before_agent_start", async (event, ctx) => {
+    if (!activation.isEnabled()) return;
     track(ctx);
     const { profiles, issues } = await profileCatalog(
       ctx.cwd,
@@ -114,14 +125,13 @@ export default function agentExtension(pi: ExtensionAPI): void {
       );
     const appendix = buildSystemPromptAppendix(
       profiles,
-      ctx.scopedModels,
       ctx.mode === "print" || ctx.mode === "json",
     );
     // A section, unlike a returned systemPrompt, keeps the prompt cache.
     event.systemPromptOptions.sections["pi-agents"] = appendix;
   });
 
-  pi.on("session_start", async (_event, ctx) => {
+  const start = async (ctx: ExtensionContext): Promise<void> => {
     track(ctx);
     // Agents the previous session paused: tell the user, and Pi, so it
     // doesn't assume they still work.
@@ -164,9 +174,16 @@ export default function agentExtension(pi: ExtensionAPI): void {
       await restored;
       finish();
     }
+  };
+
+  pi.on("session_start", async (_event, ctx) => {
+    await activation.restore(ctx);
+    if (pi.getFlag("agents")) await activation.enable(ctx);
   });
 
-  pi.on("agent_start", (_event, ctx) => track(ctx));
+  pi.on("agent_start", (_event, ctx) => {
+    if (activation.isEnabled()) track(ctx);
+  });
 
   pi.on("session_shutdown", async (event, ctx) => {
     // Switching away pauses this session's agents; the next session tells
