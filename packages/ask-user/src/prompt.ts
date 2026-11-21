@@ -4,17 +4,16 @@ export const ASK_USER_PARAMETER_DESCRIPTIONS = {
   optionDescription: "One-line detail below the label",
 };
 
-/** Describes the ask_user tool's question shape and dismissible free-form fallback. */
-export const ASK_USER_TOOL_DESCRIPTION =
-  "Ask one question per call. A custom-answer option is added automatically; do not include it. The user may dismiss without answering.";
+/** Describes the ask_user tool and when to use it. */
+export const ASK_USER_TOOL_DESCRIPTION = [
+  "Use ask_user instead of plain text when likely answers are enumerable.",
+  "Ask one multiple-choice question per call.",
+  "A custom-answer option is added automatically; do not include it.",
+  "The user may dismiss without answering."
+].join(" ");
 
-/** Adds ask_user's multiple-choice capability to the model's available-tools prompt. */
-export const ASK_USER_PROMPT_SNIPPET = "Ask a multiple-choice question";
-
-/** Guides the model to use ask_user for enumerable answers. */
-export const ASK_USER_PROMPT_GUIDELINES = [
-  "Use ask_user instead of plain text when likely answers can be enumerated.",
-];
+export const ASK_USER_PROMPT_SNIPPET = undefined;
+export const ASK_USER_PROMPT_GUIDELINES = undefined;
 
 /** Builds the behavioral tool-result message returned to the parent model for an ask_user outcome. */
 export function buildAskUserResultMessage(
