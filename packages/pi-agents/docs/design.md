@@ -125,6 +125,11 @@ return, or truncate it before the model sees it. For this reason,
 codemode. Other agent tools remain composable from scripts. Settlement and
 recovery use the same transcript evidence.
 
+Waiting holds nothing. A node that sent its agent the job, and an agent's
+wait for its groups, sleep until the work they wait for signals that it
+settled, so they occupy no running work meanwhile, and a restart finds
+them where they were, timeouts included.
+
 Cancellation follows the work. Interrupting an agent corrects it: its
 agents keep working, and their results wait until the agent answered
 again, so they don't restart the work the user just stopped. Stopping an
@@ -145,6 +150,12 @@ answer asks the recipient to send one back. Peer messages don't wake a
 blocked wait, so a child asking its waiting spawner for clarification can't
 make progress through that exchange until the wait ends. Asynchronous
 results avoid this limitation; waits aren't a general coordination loop.
+
+An interrupt keeps the messages other agents queued for its target. Their
+senders can't take them back or learn that they were lost, unlike the
+user, whose queued text returns to the editor, so dropping them would lose
+work nobody asked to undo. The
+target's next input brings them. A stop is final, so it drops them.
 
 A message can interrupt its recipient first, so a correction doesn't wait
 for work it makes pointless. The interrupt belongs to the send, not to a
@@ -213,6 +224,18 @@ agents' storage opens. Agents' calls to its tools are durable tool calls
 like any other. The twin is meant to go: once Pi offers durable versions of
 these tools, or a way to call the user's session's tools from outside its
 turns, agents use those instead.
+
+Each namespace of tools, such as an MCP server, is a group of its own, as
+in Pi: scripts see it listed with its description, and
+`describeNamespace()` returns its instructions. Configured MCP namespaces
+are declared right away while their servers connect in the background, so
+agents see them on their first turn without stalling startup on slow or
+unreachable servers. Only calls that actually reach a connecting server wait for it, as in Pi
+(and recovery waits only for servers needed by unfinished tool calls, or up
+to the startup budget for pending servers when a `codemode` call was
+interrupted before saving its initial tool catalog), while servers with
+`direct` tools are waited for once before agents start work. Namespaces
+that appear or disappear later still update every agent's selection.
 
 The twin is separate from the user's session: it connects to the servers
 again and never shares the user's conversation, UI, or session-only

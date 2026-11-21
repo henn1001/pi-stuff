@@ -73,19 +73,25 @@ Every agent also gets the tools of your MCP servers and of the extensions
 you [share with agents](./configuration.md#extension-tools), such as
 Webfox's web search, whatever its tool allowlist says. MCP tools work as in
 Pi: unless a server declares them directly, agents with `codemode` call
-them from scripts and find them with `searchTools()`, and agents without it
-load the ones they need with `tool_search`. Agents use the servers in your
+them from scripts, see each server listed with its description, and find
+its tools with `searchTools()` and `describeNamespace()`, and agents without it
+load the ones they need with `tool_search`. Direct shared tools contribute
+their prompt snippets and guidelines to agents' system prompts, and deferred
+ones do so once loaded. Agents use the servers in your
 `mcp.json` with your sign-ins; servers that other extensions register stay
 with your session. Tools of extensions you don't share stay with your
 session too. Agents started before you updated pi-agents keep the tools
 they had.
 
-`read` supports images. Codemode scripts can call the agent's other tools,
+`read` supports images. Images that other tools return, such as an MCP
+server's screenshots or a script's `image()`, are scaled to fit the agent's
+model before they enter its conversation, or left out with a note if they
+can't be. Codemode scripts can call the agent's other tools,
 except `agent_wait`, which the agent's model must call directly. Scripts get
 the agent tools' results as data: `agent_status` lists `agents` with their
 `name`, `state`, `model`, and `job`; `agent_send` returns the recipient as
 `to`, the `mode`, whether it `interrupted` the recipient, and how many
-queued messages it `dropped`; and `agent_spawn` returns the `group` and its
+queued messages from you or Pi it `dropped`; and `agent_spawn` returns the `group` and its
 `agents`, each with `id` and `name`. A refused call rejects with its reason.
 Scripts can also use [`models`](https://pi.dev/docs/latest/codemode#models)
 to list models, run classifiers, and generate images. These calls count
@@ -202,7 +208,8 @@ and for an agent's own agents, which keep working after an interrupt.
 
 Pi and agents can do the same in one step: `agent_send` with
 `mode: "interrupt"` interrupts a working agent and sends the message that
-corrects it. Its queued messages are dropped, and the result says how many.
+corrects it. Messages you and Pi queued for it are dropped, and the result
+says how many; messages from other agents stay queued for its next input.
 If the message can't be sent, for example to an agent that still waits for
 the agents its job needs, nothing is interrupted. A crash between the
 interrupt and Pi's message can leave the agent interrupted without it;

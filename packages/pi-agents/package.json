@@ -1,7 +1,7 @@
 {
   "name": "pi-agents",
   "private": true,
-  "version": "0.40.1",
+  "version": "0.42.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -37,8 +37,8 @@
     ]
   },
   "dependencies": {
-    "@earendil-works/chord": "1.5.2",
-    "@earendil-works/pi-codemode": "1.5.2",
-    "@earendil-works/pi-durable": "1.5.2"
+    "@earendil-works/chord": "1.6.0",
+    "@earendil-works/pi-codemode": "1.6.0",
+    "@earendil-works/pi-durable": "1.6.0"
   }
 }

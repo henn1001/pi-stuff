@@ -5,6 +5,7 @@
  * `codemode` come its internal model tools, which only scripts call.
  */
 
+import type { Context } from "@earendil-works/chord/context";
 import type { JsonValue } from "@earendil-works/chord/json";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import {
@@ -21,14 +22,17 @@ import {
   defineExtension,
   defineTool,
   type Extension,
+  type JsonObject,
+  NestedCallDoc,
   type PromptSection,
+  type ToolExecutionApi,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import {
   CODEMODE_TOOL_NAME,
-  type CodemodeNamespace,
   createCodemodeExtension,
 } from "@earendil-works/pi-durable/codemode";
+import { createFitImagesExtension } from "@earendil-works/pi-durable/images/fit";
 import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 import {
   createBashTool,
@@ -84,21 +88,25 @@ const DEFINITIONS: Record<PiToolName, (cwd: string) => AnyDefinition> = {
   ls: createLsToolDefinition,
 };
 
+export interface ToolPromptContribution {
+  readonly snippet?: string;
+  readonly guidelines: readonly string[];
+}
+
 /** Pi's prompt contribution of its `codemode` tool, which Pi doesn't export. */
-const CODEMODE_PROMPT = {
+const CODEMODE_PROMPT: ToolPromptContribution = {
   snippet: "Run JavaScript that calls other tools",
   guidelines: [
     "Use codemode to batch independent tool calls (Promise.allSettled), chain them, or filter large output, instead of many separate calls.",
   ],
 };
 
-/** Pi's prompt snippet and guidelines for a tool, so agents read like Pi. */
-export function toolPromptContribution(name: string): {
-  snippet?: string;
-  guidelines: readonly string[];
-} {
+/** Pi's prompt snippet and guidelines for a built-in tool, so agents read like Pi. */
+export function toolPromptContribution(
+  name: string,
+): ToolPromptContribution | undefined {
   if (name === CODEMODE_TOOL_NAME) return CODEMODE_PROMPT;
-  if (!isPiToolName(name)) return { guidelines: [] };
+  if (!isPiToolName(name)) return undefined;
   const definition = DEFINITIONS[name](process.cwd());
   return {
     snippet: definition.promptSnippet,
@@ -187,21 +195,31 @@ export function withCodemodeModels(
   ];
 }
 
+export interface ToolsExtensionOptions {
+  /** Called before a `codemode` script admits a nested tool call, so
+   * connecting MCP servers needed by dynamically computed calls can settle. */
+  beforeNestedTool?: (name: string, signal?: AbortSignal) => Promise<void>;
+}
+
 /**
  * The tools of agents. `codemode` scripts call the agent's other tools as
  * nested calls, which pi-durable replays after a restart. Its prompt
  * section lists those tools only for agents that have `codemode`. Scripts
  * also get `models.*`; their classifier and image calls run as internal
- * tools, which agents with `codemode` enable along with it.
+ * tools, which agents with `codemode` enable along with it. Images in the
+ * results of any tool fit the agent's model before they are stored.
  */
 export function createToolsExtension(
-  /** Namespaces of other tools scripts call, such as MCP servers; read at
-   * each use, so they may change. */
-  namespaces: readonly CodemodeNamespace[] = [],
+  options: ToolsExtensionOptions = {},
 ): ToolsExtension {
   // Like Pi, scripts have no deadline unless they ask for one.
   const sandbox = new CodemodeSandbox({ timeoutMs: Number.POSITIVE_INFINITY });
-  const codemode = createCodemodeExtension({ sandbox, namespaces });
+  const codemode = createCodemodeExtension({ sandbox });
+  const images = lazyImages();
+  // Images of other tools' results, such as an MCP server's screenshot or a
+  // script's `image()`, fit the agent's model before they are stored, as
+  // `read` fits its own.
+  const fit = createFitImagesExtension(images);
   const sections = (codemode.sections ?? []).map(
     (each): PromptSection => ({
       ...each,
@@ -211,19 +229,57 @@ export function createToolsExtension(
           : undefined,
     }),
   );
+  const beforeNestedTool = options.beforeNestedTool;
+  const codemodeTools = (codemode.tools ?? []).map((tool): ToolRegistration => {
+    if (tool.name !== CODEMODE_TOOL_NAME || !beforeNestedTool) return tool;
+    return {
+      ...tool,
+      execute(args, api, context) {
+        const executeTool = (async (
+          name: string,
+          toolArgs: JsonObject,
+          callContext: Context,
+          callOptions?: {
+            readonly key?: string;
+            readonly progress?: boolean;
+            readonly wait?: boolean;
+          },
+        ) => {
+          const key = callOptions?.key;
+          const existing =
+            key !== undefined
+              ? await api.snapshot(NestedCallDoc, api.taskId, key, callContext)
+              : undefined;
+          // Skip waiting when reattaching to an already-recorded keyed call
+          // (settled or admitted before a restart), so durable results return
+          // immediately even if the server now hangs.
+          if (existing?.taskId === undefined)
+            await beforeNestedTool(name, callContext.abortSignal);
+          return api.executeTool(
+            name,
+            toolArgs,
+            callContext,
+            callOptions as never,
+          );
+        }) as ToolExecutionApi["executeTool"];
+        return tool.execute(args, { ...api, executeTool }, context);
+      },
+    };
+  });
   const extension = defineExtension({
     name: TOOLS_EXTENSION,
     tools: [
-      createReadTool({ images: lazyImages() }),
+      createReadTool({ images }),
       createBashTool(),
       createEditTool(),
       createWriteTool(),
       adaptReadOnly(createGrepToolDefinition),
       adaptReadOnly(createFindToolDefinition),
       adaptReadOnly(createLsToolDefinition),
-      ...(codemode.tools ?? []),
+      ...codemodeTools,
     ],
     sections,
+    hooks: fit.hooks ?? [],
   });
   return { extension, close: () => sandbox.close() };
 }

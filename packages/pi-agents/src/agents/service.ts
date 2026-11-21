@@ -20,8 +20,9 @@ import {
 import { CONTEXT, contextFor, conversationId, taskId } from "./context.js";
 import { type CreationDeps, createGraph } from "./creation.js";
 import { Delivery } from "./delivery.js";
-import type { AgentExtensions } from "./extensions.js";
+import { type AgentExtensions, syncTwinSelections } from "./extensions.js";
 import { describeReport, type HarnessReport } from "./failures.js";
+import { GroupEnded, groupKey } from "./graphs.js";
 import { userInput } from "./inputs.js";
 import { MessageLog } from "./message-log.js";
 import { queuedMessages } from "./messaging.js";
@@ -123,6 +124,11 @@ export class AgentService {
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private refreshChain: Promise<void> = Promise.resolve();
   private unsubscribeParent: (() => void) | undefined;
+  private unsubscribeTwin: (() => void) | undefined;
+  /** The claims of `agent_wait` calls signalled that their group ended. */
+  private readonly signaledClaims = new Set<string>();
+  /** Updates of agents' twin extensions, one after another. */
+  private twinChain: Promise<void> = Promise.resolve();
   private closed = false;
 
   private readonly creation: CreationDeps;
@@ -215,6 +221,13 @@ export class AgentService {
   // --- Lifecycle ---
 
   private async initialize(): Promise<void> {
+    // Listen first, so a namespace that comes during the first update
+    // updates again; before any work resumes, so it sees the namespaces.
+    this.unsubscribeTwin = this.extensions.twin.onNamespaces(() => {
+      this.syncSelections().catch((error) => this.onReport(error));
+    });
+    // A failure fails startup rather than resume with stale selections.
+    await this.syncSelections();
     // Work a crash left running behind a stop fence ends before it can
     // go on: the stop may have recorded the fence before its aborts.
     // Before observing, whose refreshes can resume scheduling.
@@ -223,6 +236,9 @@ export class AgentService {
     await this.stalls.start();
     await this.projection.reload();
     for (const id of stopped) await this.abortAgent(id);
+    // A stop a crash cut short may have left messages queued.
+    for (const [id, record] of Object.entries(this.projection.agents()))
+      if (record.stopped) await this.withdrawMessages(id);
     for (const id of Object.keys(this.projection.agents())) {
       await this.observer.loadLastAssistant(id);
       // A request recorded before a crash may lack its submission.
@@ -272,6 +288,18 @@ export class AgentService {
     return [...new Set(tasks.map((task) => task.agent))];
   }
 
+  /** Update agents' selections of the twin's extensions, one update after
+   * another. Resolves once this update ran. */
+  private syncSelections(): Promise<void> {
+    const run = this.twinChain.then(() =>
+      this.closed
+        ? undefined
+        : syncTwinSelections(this.creation.anchor, this.extensions),
+    );
+    this.twinChain = run.catch(() => {});
+    return run;
+  }
+
   /** Stop observing the harness; the host closes it afterwards. */
   async close(): Promise<void> {
     if (this.closed) return;
@@ -287,10 +315,12 @@ export class AgentService {
     this.observer.stop();
     this.stalls.stop();
     this.unsubscribeParent?.();
+    this.unsubscribeTwin?.();
     this.listeners.clear();
     this.waits.check();
     await this.refreshChain.catch(() => {});
     await this.reconcileChain.catch(() => {});
+    await this.twinChain;
     await this.delivery.settle();
   }
 
@@ -494,6 +524,7 @@ export class AgentService {
     const info = target.info;
     const text = message.trim();
     if (!text) throw new AgentError("The message must not be empty");
+    await this.extensions.twin.waitForDirect();
     const request: ParentRequest = {
       message: text,
       whenBusy: whenBusyOf(mode),
@@ -528,6 +559,7 @@ export class AgentService {
   /** Message an agent on behalf of the user; results stay in the agent. */
   async prompt(nameOrId: string, text: string, mode: SendMode): Promise<void> {
     const info = this.require(nameOrId);
+    await this.extensions.twin.waitForDirect();
     await this.store.submitInput(info.id, info.name, {
       type: "input",
       ...userInput(text),
@@ -560,6 +592,7 @@ export class AgentService {
       throw new AgentError(
         `${info.name} has nothing to continue; message it instead`,
       );
+    await this.extensions.twin.waitForDirect();
     try {
       await this.store.submitInput(info.id, info.name, { type: "continue" });
     } catch (error) {
@@ -650,11 +683,15 @@ export class AgentService {
       // Again, for work that started between the abort and the stop, such
       // as the job of a graph's agent; nothing starts after the stop.
       await this.abortAgent(agentId);
+      await this.withdrawMessages(agentId);
     });
     // The agents below it stopped with it: end their work in their turns,
     // so a send to one lands before and is aborted, or is refused.
     for (const id of stopped.slice(1))
-      await this.extensions.hub.turn(id, () => this.abortAgent(id));
+      await this.extensions.hub.turn(id, async () => {
+        await this.abortAgent(id);
+        await this.withdrawMessages(id);
+      });
     for (const id of stopped) this.projection.clearSettled(id);
     await this.refresh(this.projection.withHelpers(stopped));
     // Their groups were withdrawn with them; stop them now.
@@ -667,6 +704,19 @@ export class AgentService {
       CONTEXT,
     );
     await conversation?.abort(CONTEXT);
+  }
+
+  /**
+   * Withdraw the messages of other agents still queued for a stopped agent.
+   * An interrupt keeps them for its next input, as their senders can't take
+   * them back, but a stop is final: they show as dropped.
+   */
+  private async withdrawMessages(agentId: string): Promise<void> {
+    const cid = conversationId(agentId);
+    const inbox = await this.harness.snapshot(InboxDoc, cid, CONTEXT);
+    for (const item of inbox?.items ?? [])
+      if (item.mode !== "write" && item.onAbort === "keep")
+        await this.harness.abortSubmission(item.id, CONTEXT, cid);
   }
 
   private async stopGraph(graphId: string): Promise<void> {
@@ -904,6 +954,7 @@ export class AgentService {
       if (stopped.length > 0) await this.store.clearPending(stopped);
       await this.closeEndedHelpers();
       await this.cancelForFailures();
+      await this.signalClaims();
       await this.presentResults();
       this.waits.check();
       this.delivery.schedule();
@@ -954,7 +1005,10 @@ export class AgentService {
     for (const [id, record] of Object.entries(this.projection.agents())) {
       if (this.closed) return;
       if (record.stopped && this.projection.info(id)?.state === "working")
-        await this.extensions.hub.turn(id, () => this.abortAgent(id));
+        await this.extensions.hub.turn(id, async () => {
+          await this.abortAgent(id);
+          await this.withdrawMessages(id);
+        });
     }
   }
 
@@ -969,6 +1023,30 @@ export class AgentService {
       // A quick retry can replace the projected failure before refresh.
       // Durable run boundaries preserve earlier work and exclude retries.
       await this.store.cancelFailedGroups(id);
+    }
+  }
+
+  /**
+   * Wake the `agent_wait` calls that hold the results of groups that ended.
+   * A group's outcome can be decided while its agents still work, and a
+   * group can end without running its own code, so only its terminal task
+   * counts. A repeated signal is a duplicate, so a restart signals again.
+   */
+  private async signalClaims(): Promise<void> {
+    for (const [id, graph] of Object.entries(this.projection.graphs())) {
+      if (!isSpawned(graph) || graph.claim === undefined) continue;
+      const key = `${graph.claim}:${id}`;
+      if (this.signaledClaims.has(key)) continue;
+      if (!(await this.observer.isFinished(Number(id)))) continue;
+      if (await this.observer.isFinished(graph.claim)) continue;
+      await this.harness.signal(
+        graph.claim as TaskId,
+        GroupEnded,
+        groupKey(Number(id)),
+        {},
+        CONTEXT,
+      );
+      this.signaledClaims.add(key);
     }
   }
 
