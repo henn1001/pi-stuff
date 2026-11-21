@@ -1,8 +1,18 @@
 /**
- * FocusController intercepts Pi's terminal input before the focused
- * component. ← in an empty editor and Ctrl+Q open the agent overview.
- * Attaching from any entry point hides the summary and holds deliveries;
- * detaching releases them and returns to the overview.
+ * FocusController: moves keyboard focus between Pi's editor and the agent
+ * panel without owning a component. It intercepts raw terminal input, which
+ * Pi hands to extensions before the focused component:
+ *
+ *   editor ── ← (empty editor) / ctrl+q ──▶ panel, or /agents if it's empty
+ *   panel  ── esc / → / any key it doesn't use ──▶ editor
+ *   panel  ── ⏎ ──▶ attach view (ctx.ui.custom owns focus until it closes)
+ *   panel  ── tab ──▶ /agents ── tab ──▶ /messages ── tab ──▶ panel
+ *   panel  ── shift+tab ──▶ /messages, the cycle backwards
+ *   panel  ── m ──▶ /messages at the selected message, or filtered by the
+ *                   selected agent's name
+ *
+ * It also owns attaching, so the panel, the overlay, and `/agent` share one
+ * path that hides the panel and holds deliveries while attached.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -116,12 +126,13 @@ export class FocusController {
     return true;
   }
 
-  /** Ctrl+Q: browse agents, also mid-composition. */
+  /** Ctrl+Q: focus the panel, also mid-composition, or browse agents. */
   focusPanel(ctx?: ExtensionContext): void {
     if (ctx) this.ctx = ctx;
     if (this.yieldToOtherView() || this.paneOpen || this.panel.isSuppressed())
       return;
-    if (this.ctx) this.onBrowse?.(this.ctx);
+    if (this.panel.hasRows()) this.panel.setFocused(true);
+    else if (this.ctx) this.browse(this.ctx);
   }
 
   /** Tab from `/agents`: focus the panel at the same row, if it shows it. */
@@ -163,16 +174,12 @@ export class FocusController {
     this.panel.setSuppressed(true);
     this.paneOpen = true;
     void openAgentPane(ctx, service, agentId)
+      .catch((error) => notify(ctx, errorText(error), "error"))
       .finally(() => {
         this.paneOpen = false;
         this.panel.setSuppressed(false);
         this.onPaneClosed?.(ctx);
-      })
-      .then(() => {
-        if (this.ctx === ctx && this.host.current() === service)
-          this.onBrowse?.(ctx, `agent:${agentId}`);
-      })
-      .catch((error) => notify(ctx, errorText(error), "error"));
+      });
   }
 
   private handle(data: string): { consume?: boolean } | undefined {
@@ -212,6 +219,11 @@ export class FocusController {
     if (!this.panel.isFocused()) {
       // Only from an empty editor, so ← keeps moving the cursor while typing.
       if (key !== "left" || ctx.ui.getEditorText() !== "") return undefined;
+      if (this.panel.hasRows()) {
+        this.panel.setFocused(true);
+        return { consume: true };
+      }
+      // Without open agents, ← browses all of them.
       return this.browse(ctx) ? { consume: true } : undefined;
     }
     if (keybindings.matches(data, "tui.select.cancel") || key === "right") {

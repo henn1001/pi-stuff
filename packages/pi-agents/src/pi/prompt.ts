@@ -1,6 +1,6 @@
 /**
  * The parent's system prompt section: brief guidance, the usable
- * profiles. The tools describe themselves.
+ * profiles, and the user's scoped models. The tools describe themselves.
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -81,21 +81,72 @@ function element(
     : `  <${name}${attrs}>${escapeXml(text)}</${name}>`;
 }
 
-/** Available profile names and descriptions, including guidance when none exist. */
-export function buildProfilesPrompt(profiles: readonly Profile[]): string {
+/** One element per usable profile, its description as text. */
+function buildProfilesPrompt(profiles: readonly Profile[]): string {
+  if (profiles.length === 0) return "";
   return [
-    "Only use profile names listed in the <agent_profiles> section; never invent a profile name. If no profiles are available, omit the profile in agent_spawn calls.",
     "<agent_profiles>",
     ...profiles.map((profile) =>
-      element("profile", { name: profile.name }, oneLine(profile.description)),
+      element(
+        "profile",
+        {
+          name: profile.name,
+          model: profile.model,
+          thinking: profile.thinking,
+          tools: profile.tools?.join(","),
+          skills: profile.skills?.join(","),
+        },
+        oneLine(profile.description),
+      ),
     ),
     "</agent_profiles>",
   ].join("\n");
 }
 
+/** A model the user scoped, with the thinking level the scope pins. */
+export interface ScopedModelEntry {
+  model: Model<Api>;
+  thinkingLevel?: string;
+}
+
+function formatContext(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(1))}M`;
+  return `${Math.round(tokens / 1_000)}k`;
+}
+
+/** The models the user scoped with `--models` or `/scoped-models`, with
+ * their catalog details, so the parent knows which names are models. */
+function buildModelsPrompt(models: readonly ScopedModelEntry[]): string {
+  if (models.length === 0) return "";
+  return [
+    '<agent_models note="cost in USD per million input/output tokens">',
+    ...models.map(({ model, thinkingLevel }) =>
+      element("model", {
+        id: `${model.provider}/${model.id}`,
+        name: model.name,
+        context: model.contextWindow
+          ? formatContext(model.contextWindow)
+          : undefined,
+        cost: model.cost
+          ? `${model.cost.input}/${model.cost.output}`
+          : undefined,
+        thinking: thinkingLevel,
+      }),
+    ),
+    "</agent_models>",
+  ].join("\n");
+}
+
 export function buildSystemPromptAppendix(
   profiles: readonly Profile[],
+  scopedModels: readonly ScopedModelEntry[] = [],
   singleShot = false,
 ): string {
-  return [guidance(singleShot), buildProfilesPrompt(profiles)].join("\n");
+  return [
+    guidance(singleShot),
+    buildProfilesPrompt(profiles),
+    buildModelsPrompt(scopedModels),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

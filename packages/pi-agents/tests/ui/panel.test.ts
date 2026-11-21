@@ -119,7 +119,7 @@ describe("panel", () => {
     }
   });
 
-  test("a click on the summary opens the overview", () => {
+  test("a click on the summary focuses the panel; on a row, it attaches", () => {
     const message: MessageInfo = {
       id: "m",
       from: { id: "1", name: "scout" },
@@ -129,14 +129,9 @@ describe("panel", () => {
       status: "queued",
     };
     const { click, attached, panel } = mount([message]);
-    let browsed = 0;
-    panel.onBrowse = () => browsed++;
     expect(click(80, 0, 3)).toEqual({ handled: true });
-    expect(browsed).toBe(1);
-    expect(panel.isFocused()).toBe(false);
+    expect(panel.isFocused()).toBe(true);
     expect(attached).toEqual([]);
-    // The old focused rows still route clicks when focused programmatically.
-    panel.setFocused(true);
     // Working agents, newest first: scout, then notes.
     click(80, 0, 3);
     click(80, 1, 3);

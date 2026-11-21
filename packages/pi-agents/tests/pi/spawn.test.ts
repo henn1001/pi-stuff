@@ -37,10 +37,6 @@ function project(): string {
     "---\nname: checker\ndescription: Checks\nmodel: openai/mini\nthinking: low\ntools: [read]\nskills: [lint]\n---\nCheck things.\n",
   );
   fs.writeFileSync(
-    path.join(dir, ".pi", "agents", "spawner.md"),
-    "---\nname: spawner\ndescription: Delegates work\nspawn: true\n---\n",
-  );
-  fs.writeFileSync(
     path.join(dir, ".pi", "agents", "broken.md"),
     "---\nname: broken\ndescription: Broken\nskills: [missing]\n---\n",
   );
@@ -111,35 +107,6 @@ describe("resolveSpawn", () => {
     expect(inheritedTools(["web_search"])).toBeUndefined();
   });
 
-  test("null and blank optional strings use inherited or profile defaults", async () => {
-    const cwd = project();
-    const sources = { skills: discoverSkills, thinking: "high" };
-    for (const empty of [null, "", " \t\n"]) {
-      const request = {
-        job: "x",
-        name: empty,
-        profile: empty,
-        cwd: empty,
-      };
-      expect(await resolveSpawn(request, context(cwd), sources)).toEqual(
-        await resolveSpawn({ job: "x" }, context(cwd), sources),
-      );
-      expect(
-        await resolveSpawn(
-          { ...request, profile: "checker" },
-          context(cwd),
-          sources,
-        ),
-      ).toEqual(
-        await resolveSpawn(
-          { job: "x", profile: "checker" },
-          context(cwd),
-          sources,
-        ),
-      );
-    }
-  });
-
   test("profiles supply settings, instructions, and skills", async () => {
     const cwd = project();
     const spec = await resolveSpawn(
@@ -155,42 +122,91 @@ describe("resolveSpawn", () => {
     expect(spec.instructions).toContain("Run the linter.");
   });
 
-  test("reports unknown profiles, profile skills, and directories", async () => {
+  test("explicit arguments override the profile", async () => {
     const cwd = project();
-    for (const [request, error] of [
-      [{ job: "x", profile: "nope" }, 'Unknown profile "nope"'],
-      [{ job: "x", profile: "broken" }, "missing (unknown)"],
-      [{ job: "x", cwd: "missing" }, "Working directory not found"],
-    ] as const)
-      await expect(
-        resolveSpawn(request, context(cwd), { skills: discoverSkills }),
-      ).rejects.toThrow(error);
+    const spec = await resolveSpawn(
+      {
+        job: "x",
+        profile: "checker",
+        model: "big",
+        thinking: "off",
+        tools: ["read", "grep"],
+      },
+      context(cwd),
+      { skills: discoverSkills, thinking: "high" },
+    );
+    expect(spec.model).toEqual({ provider: "openai", modelId: "big" });
+    expect(spec.thinking).toBe("off");
+    expect(spec.tools).toEqual(["read", "grep"]);
   });
 
-  test("only a profile grants permission to spawn", async () => {
+  test("reports unknown profiles, skills, models, and directories", async () => {
     const cwd = project();
-    for (const [profile, expected] of [
-      [undefined, undefined],
-      ["checker", undefined],
-      ["spawner", true],
-    ] as const) {
-      const request = { job: "x", profile };
-      const spec = await resolveSpawn(request, context(cwd), {
+    expect(
+      resolveSpawn({ job: "x", profile: "nope" }, context(cwd), {
         skills: discoverSkills,
-      });
-      expect(spec.spawn).toBe(expected);
-      const helper = await resolveHelper(
-        request,
-        context(cwd),
-        { cwd },
-        discoverSkills,
-      );
-      expect(helper.spawn).toBe(expected);
-    }
+      }),
+    ).rejects.toThrow('Unknown profile "nope"');
+    expect(
+      resolveSpawn({ job: "x", profile: "broken" }, context(cwd), {
+        skills: discoverSkills,
+      }),
+    ).rejects.toThrow("missing (unknown)");
+    expect(
+      resolveSpawn({ job: "x", skills: ["missing"] }, context(cwd), {
+        skills: discoverSkills,
+      }),
+    ).rejects.toThrow("Unavailable skills: missing (unknown)");
+    expect(
+      resolveSpawn({ job: "x", model: "nope" }, context(cwd), {
+        skills: discoverSkills,
+      }),
+    ).rejects.toThrow("No available model matches");
+    expect(
+      resolveSpawn({ job: "x", cwd: "missing" }, context(cwd), {
+        skills: discoverSkills,
+      }),
+    ).rejects.toThrow("Working directory not found");
   });
 
-  test("profiles can name skills restricted to user invocation", async () => {
+  test("skills in the request replace the catalog and the profile's", async () => {
     const cwd = project();
+    const chosen = await resolveSpawn(
+      { job: "x", skills: ["style", "lint"] },
+      context(cwd),
+      { skills: discoverSkills },
+    );
+    expect(chosen.ambientSkills).toBe(false);
+    expect(chosen.instructions).toContain("Apply style.");
+    expect(chosen.instructions).toContain("Run the linter.");
+    const replaced = await resolveSpawn(
+      { job: "x", profile: "checker", skills: ["style"] },
+      context(cwd),
+      { skills: discoverSkills },
+    );
+    expect(replaced.instructions).toContain("Check things.");
+    expect(replaced.instructions).toContain("Apply style.");
+    expect(replaced.instructions).not.toContain("Run the linter.");
+    // An empty list means no skills, even for a profile whose skills are
+    // missing.
+    const none = await resolveSpawn(
+      { job: "x", profile: "broken", skills: [] },
+      context(cwd),
+      { skills: discoverSkills },
+    );
+    expect(none.ambientSkills).toBe(false);
+    expect(none.instructions).toBeUndefined();
+  });
+
+  test("only profiles name skills that models can't invoke", async () => {
+    const cwd = project();
+    expect(
+      resolveSpawn({ job: "x", skills: ["review"] }, context(cwd), {
+        skills: discoverSkills,
+      }),
+    ).rejects.toThrow(
+      "review (only the user can choose it, with /skill:review or in a profile)",
+    );
     const spec = await resolveSpawn(
       { job: "x", profile: "reviewer" },
       context(cwd),
@@ -199,29 +215,23 @@ describe("resolveSpawn", () => {
     expect(spec.instructions).toContain("Apply review.");
   });
 
-  test("helpers inherit their spawner's settings unless a profile overrides them", async () => {
+  test("helpers choose skills like spawns", async () => {
     const cwd = project();
-    const defaults = {
-      cwd,
-      model: { provider: "openai", modelId: "big" },
-      thinking: "high" as const,
-    };
-    const inherited = await resolveHelper(
-      { job: "x" },
+    const spec = await resolveHelper(
+      { job: "x", skills: ["lint"] },
       context(cwd),
-      defaults,
+      { cwd },
       discoverSkills,
     );
-    expect(inherited.model).toEqual(defaults.model);
-    expect(inherited.thinking).toBe("high");
-    const profiled = await resolveHelper(
-      { job: "x", profile: "checker" },
-      context(cwd),
-      defaults,
-      discoverSkills,
-    );
-    expect(profiled.model).toEqual({ provider: "openai", modelId: "mini" });
-    expect(profiled.thinking).toBe("low");
-    expect(profiled.instructions).toContain("Run the linter.");
+    expect(spec.ambientSkills).toBe(false);
+    expect(spec.instructions).toContain("Run the linter.");
+    expect(
+      resolveHelper(
+        { job: "x", skills: ["review"] },
+        context(cwd),
+        { cwd },
+        discoverSkills,
+      ),
+    ).rejects.toThrow("only the user can choose it");
   });
 });

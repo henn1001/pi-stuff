@@ -36,8 +36,6 @@ export interface PromptOptions {
   trusted: () => boolean;
   /** The skills of a directory under the given trust. */
   skills: SkillSource;
-  /** Available profiles and selection guidance for agents that may spawn. */
-  profiles?: (cwd: string) => Promise<string>;
 }
 
 type ContextFiles = Array<{ path: string; content: string }>;
@@ -123,14 +121,6 @@ export function createPromptExtension(options: PromptOptions): Extension {
       section("preamble", () => AGENT_PREAMBLE, { tag: false }),
       section("tools", (input) => renderTools(toolNames(input))),
       section("rules", (input) => buildRules(toolNames(input))),
-      section(
-        "agent_profiles",
-        (input) =>
-          toolNames(input).includes(SPAWN_TOOL)
-            ? options.profiles?.(cwdOf(input))
-            : undefined,
-        { tag: false },
-      ),
       section("project_context", (input) => {
         const files = contextFiles(cwdOf(input));
         return files.length > 0 ? renderProjectContext(files) : undefined;

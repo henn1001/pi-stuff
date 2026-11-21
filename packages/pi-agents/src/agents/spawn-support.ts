@@ -68,6 +68,11 @@ export interface PlanArgs {
     name?: string;
     after?: string[];
     profile?: string;
+    model?: string;
+    thinking?: string;
+    tools?: string[];
+    skills?: string[];
+    spawn?: boolean;
   }>;
 }
 export function textResult(
@@ -154,6 +159,11 @@ export async function plan(
       {
         job: agent.job,
         ...(agent.profile ? { profile: agent.profile } : {}),
+        ...(agent.model ? { model: agent.model } : {}),
+        ...(agent.thinking ? { thinking: agent.thinking } : {}),
+        ...(agent.tools ? { tools: agent.tools } : {}),
+        ...(agent.skills ? { skills: agent.skills } : {}),
+        ...(agent.spawn !== undefined ? { spawn: agent.spawn } : {}),
       },
       defaults,
     );

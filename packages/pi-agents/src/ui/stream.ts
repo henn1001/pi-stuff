@@ -2,7 +2,7 @@
  * `/messages`: every message between agents in one stream, newest first,
  * one line each in the format of message cards, with the time in front:
  *
- *   ╭─ Agents  [Messages] (22) · agent: alpha ─────────────────────╮
+ *   ╭─ Messages (22) · alpha ──────────────────────────────────────╮
  *   │   12:48:31 beta → alpha Location proposal: reserve the centr… │
  *   │ ▸ 12:48:30 alpha → gamma Offer two inclusive picnic activiti… │
  *   ├──────────────────────────────────────────────────────────────┤
@@ -12,11 +12,12 @@
  *
  * The text starts right after the names, so rows are ragged but the text
  * gets the room. Names stand out, the text is dim, and red once dropped.
- * Typing filters by text and names; Space types too. An optional agent
- * scope filters by ID, and Ctrl+X clears it. ⏎ opens the selected message
- * as Markdown below the list. ← attaches to the sender and → to the
- * recipient. Tab and Shift+Tab switch to the agent overview. Esc closes
- * the detail, then clears the text filter, then returns to the main agent.
+ * Typing filters by text and names; Space types too. ⏎ opens
+ * the selected message as Markdown in a pane below the list, which follows
+ * the selection, and closes it again. ← attaches to the sender and → to the
+ * recipient, in the order the line names them. Tab and Shift+Tab go on to
+ * the other views. Esc closes the pane, then clears the filter, then
+ * closes.
  */
 
 import {
@@ -35,9 +36,7 @@ import type { MessageInfo } from "../agents/types.js";
 import {
   boxLine,
   edgeLine,
-  FULLSCREEN_OVERLAY,
   fitHints,
-  padFrame,
   paneLayout,
   renderDetail,
   windowDetail,
@@ -70,17 +69,8 @@ function matches(message: MessageInfo, query: string): boolean {
 export function messageStream(
   messages: readonly MessageInfo[],
   query = "",
-  agentId?: string,
 ): MessageInfo[] {
-  return messages
-    .filter(
-      (message) =>
-        (!agentId ||
-          message.from.id === agentId ||
-          message.to.id === agentId) &&
-        matches(message, query),
-    )
-    .reverse();
+  return messages.filter((message) => matches(message, query)).reverse();
 }
 
 /** A message's row: its time, who, and the first line of its text, cut at
@@ -97,23 +87,11 @@ export function streamRow(
   return truncateToWidth(`${lead}${text}`, width, "…");
 }
 
-export interface StreamState {
-  query?: string;
-  selected?: string;
-  reading?: boolean;
-  detailOffset?: number;
-  detailAnchor?: string;
-  /** Restrict messages to this agent's ID, independent of the text filter. */
-  scope?: { id: string; name: string };
-}
-
 export interface StreamOptions {
   /** All messages, oldest first. */
   messages: () => MessageInfo[];
-  /** State shared between visits in the same session. */
-  state: StreamState;
-  /** Replace the scope; null shows all agents, undefined retains it. */
-  scope?: { id: string; name: string } | null;
+  /** The filter to start with, such as an agent's name. */
+  query?: string;
   /** The message to select first, by ID. */
   select?: string;
   emptyText: string;
@@ -129,7 +107,6 @@ export interface StreamOptions {
 class MessageStreamView implements Component {
   private query: string;
   private selected: string | undefined;
-  private scope: { id: string; name: string } | undefined;
   /** Whether the pane with the selected message's text is open. */
   private reading = false;
   private detailOffset = 0;
@@ -143,26 +120,17 @@ class MessageStreamView implements Component {
     private readonly options: StreamOptions,
     private readonly done: (after?: () => void) => void,
   ) {
-    const { state } = options;
-    const reset = options.scope !== undefined || options.select !== undefined;
-    this.scope =
-      options.scope === undefined ? state.scope : (options.scope ?? undefined);
-    this.query = reset ? "" : (state.query ?? "");
-    this.selected = options.select ?? (reset ? undefined : state.selected);
-    this.reading = reset ? false : (state.reading ?? false);
-    this.detailOffset = reset ? 0 : (state.detailOffset ?? 0);
-    this.detailAnchor = reset ? undefined : state.detailAnchor;
+    this.query = options.query ?? "";
+    this.selected = options.select;
   }
 
   private items(): MessageInfo[] {
-    return messageStream(this.options.messages(), this.query, this.scope?.id);
+    return messageStream(this.options.messages(), this.query);
   }
 
   private index(items: MessageInfo[]): number {
-    return Math.max(
-      items.findIndex((message) => message.id === this.selected),
-      0,
-    );
+    const index = items.findIndex((message) => message.id === this.selected);
+    return index >= 0 ? index : 0;
   }
 
   private syncTimer(): void {
@@ -180,12 +148,8 @@ class MessageStreamView implements Component {
     this.syncTimer();
     const { color } = this.style;
     const items = this.items();
-    const scope = this.scope ? ` · agent: ${this.scope.name}` : "";
-    const filter = this.query ? ` · filter: ${this.query}▌` : "";
-    const title = color(
-      "accent",
-      `Agents  [Messages] (${items.length})${scope}${filter}`,
-    );
+    const filter = this.query ? ` · ${this.query}▌` : "";
+    const title = color("accent", `Messages (${items.length})${filter}`);
     const lines = [edgeLine(["╭", "╮"], title, width, color)];
     const inner = Math.max(8, width - 4);
     const index = this.index(items);
@@ -193,13 +157,12 @@ class MessageStreamView implements Component {
     if (selected) this.selected = selected.id;
     const reading = this.reading && selected !== undefined;
     const hints = [
-      reading ? "esc close" : this.query ? "esc clear" : "esc main agent",
-      `tab ${this.options.next.label}`,
-      ...(this.scope ? ["ctrl+x all"] : []),
       "type to filter",
       "↑↓ move",
       `⏎ ${reading ? "close" : "read"}`,
       ...(selected ? [`← ${selected.from.name}`, `→ ${selected.to.name}`] : []),
+      `tab ${this.options.next.label}`,
+      reading ? "esc close" : this.query ? "esc clear" : "esc back",
     ];
     const footer = (scroll: boolean) =>
       edgeLine(
@@ -214,18 +177,18 @@ class MessageStreamView implements Component {
     if (!selected) {
       const empty = this.query
         ? `Nothing matches ${this.query}.`
-        : this.scope
-          ? `No messages involving ${this.scope.name}.`
-          : this.options.emptyText;
+        : this.options.emptyText;
       lines.push(boxLine(color("dim", empty), width, color));
-      padFrame(lines, this.tui.terminal.rows, width, color);
-      lines.push(footer(false));
+      lines.push(footer(false), "");
       return lines;
     }
-    const layout = paneLayout(this.tui.terminal.rows, items.length, true);
+    // Like the other overlays: under about 80% of the terminal. Reading,
+    // the list gets the top and the pane the rest, both fixed, so nothing
+    // moves while the selection changes.
+    const layout = paneLayout(this.tui.terminal.rows, items.length);
     const listRows = reading
       ? layout.tableRows
-      : Math.min(items.length, Math.max(1, this.tui.terminal.rows - 2));
+      : Math.min(items.length, layout.tableRows + layout.detailRows + 1);
     const start = Math.max(
       0,
       Math.min(index - Math.floor(listRows / 2), items.length - listRows),
@@ -267,8 +230,7 @@ class MessageStreamView implements Component {
       for (let i = shown.length; i < layout.detailRows; i++)
         lines.push(boxLine("", width, color));
     }
-    padFrame(lines, this.tui.terminal.rows, width, color);
-    lines.push(footer(scroll));
+    lines.push(footer(scroll), "");
     return lines;
   }
 
@@ -289,11 +251,9 @@ class MessageStreamView implements Component {
       );
     };
     if (keybindings.matches(data, "tui.select.cancel")) {
-      if (this.reading && items.length > 0) this.reading = false;
-      else if (this.query) {
-        this.reading = false;
-        this.query = "";
-      } else {
+      if (this.reading) this.reading = false;
+      else if (this.query) this.query = "";
+      else {
         this.close();
         return;
       }
@@ -320,8 +280,6 @@ class MessageStreamView implements Component {
       const target = key === "tab" ? this.options.next : this.options.previous;
       this.close(target.open);
       return;
-    } else if (key === "ctrl+x" && this.scope) {
-      this.scope = undefined;
     } else if (key === "backspace") this.query = this.query.slice(0, -1);
     else if (key === "space" || (!data.startsWith("\u001b") && data >= " ")) {
       // Space types too, so a filter can have several words.
@@ -341,19 +299,12 @@ class MessageStreamView implements Component {
   }
 
   dispose(): void {
-    const { state } = this.options;
-    state.query = this.query;
-    state.selected = this.selected;
-    state.reading = this.reading;
-    state.detailOffset = this.detailOffset;
-    state.detailAnchor = this.detailAnchor;
-    state.scope = this.scope;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
   }
 }
 
-/** Open the full-screen stream, hiding the agent panel meanwhile. */
+/** Open the stream in the editor slot, hiding the agent panel meanwhile. */
 export async function openMessageStream(
   ctx: Pick<ExtensionContext, "ui">,
   options: StreamOptions,
@@ -368,7 +319,7 @@ export async function openMessageStream(
         after = then;
         done(undefined);
       });
-    }, FULLSCREEN_OVERLAY);
+    });
   } finally {
     panel?.setSuppressed(false);
   }

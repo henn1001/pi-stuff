@@ -59,8 +59,7 @@ again.
 An agent that may spawn splits its own job while it works: it starts agents
 of its own, keeps working or ends its turn, and continues once their results
 arrive. This covers work whose shape only shows up on the way, such as one
-agent per file it finds. Set `spawn: true` in a profile and select that
-profile. Spawn permission comes only from the profile, never a tool argument.
+agent per file it finds. Ask Pi for it, or set `spawn: true` in a profile.
 
 The agent spawns the way Pi does, one group per call, with the same `after`
 edges, so one of its agents can merge the others' results. The group's
@@ -97,12 +96,12 @@ their results; you can still attach to them through `/agents`. Their full
 names include their spawner's name, such as
 `mapper.models`.
 
-- Spawned agents inherit their spawner's model, thinking level, and working
-  directory. A profile can override model and thinking settings, and select
-  from tools their spawner has. The spawn call cannot set these fields directly.
-- They see your skill catalog unless their selected profile specifies skills.
-  Agents select profiles by name, not individual skills.
-- They may spawn agents of their own only when their selected profile grants it.
+- Spawned agents run on their agent's model, thinking level, and working
+  directory unless the agent picks others, and get only tools their agent
+  has.
+- They see your skills like any agent, and the agent can name skills for
+  them the way Pi does.
+- They may spawn agents of their own only when their agent asks for it.
   Agents nest at most three levels deep: Pi's agents, theirs, and those
   agents' agents, which can't spawn.
 - An agent can message the agent that spawned it, the agents spawned with

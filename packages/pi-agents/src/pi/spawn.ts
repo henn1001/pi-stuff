@@ -1,14 +1,14 @@
 /**
  * Resolve a spawn request from the parent into a `SpawnSpec`: profile,
  * model, thinking level, tools, skills, and working directory. Settings
- * resolve from the profile, then the parent session.
+ * resolve as explicit arguments, then the profile, then the parent session.
+ * Skills a model names in a tool call must be ones a model may invoke.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { normalizeSpawnRequest } from "../agents/spawn-input.js";
 import {
   AgentError,
   type HelperDefaults,
@@ -33,18 +33,23 @@ import { AGENT_TOOL_NAMES } from "../host/tools.js";
 
 export interface SpawnRequest {
   job: string;
-  name?: string | null;
-  profile?: string | null;
-  cwd?: string | null;
+  name?: string;
+  profile?: string;
+  model?: string;
+  thinking?: string;
+  tools?: string[];
+  skills?: string[];
+  cwd?: string;
+  spawn?: boolean;
 }
 
 /** What a spawn draws on besides its request. */
 export interface SpawnSources {
   /** The skills of a directory; the session's shared catalog. */
   skills: SkillSource;
-  /** Thinking level without one in the profile. */
+  /** Thinking level without one in the request or profile. */
   thinking?: string;
-  /** Tools without any in the profile. */
+  /** Tools without any in the request or profile. */
   tools?: string[];
   /** Working directory and model instead of the parent session's, for
    * helpers that inherit their agent's. */
@@ -131,26 +136,34 @@ async function skillsPrompt(
   return inlineSkills(names, await source(cwd, trusted), chooser);
 }
 
-/** The profile body plus its inlined skills, replacing the ambient catalog. */
+/**
+ * The profile body plus the inlined skills. Skills in the request replace
+ * the profile's; either list turns off the ambient catalog. The user writes
+ * profiles, so only they may name skills that models can't invoke.
+ */
 async function instructionsOf(
   profile: Profile | undefined,
+  requested: string[] | undefined,
   cwd: string,
   trusted: boolean,
   source: SkillSource,
 ): Promise<{ instructions?: string; ambientSkills: boolean }> {
   const parts = [profile?.instructions ?? ""];
-  const names = profile?.skills;
+  const names = requested ?? profile?.skills;
   if (names !== undefined) {
+    const chooser = requested !== undefined ? "model" : "user";
     const { prompt, missing } = await skillsPrompt(
       names,
-      "user",
+      chooser,
       cwd,
       trusted,
       source,
     );
     if (missing.length > 0)
       throw new AgentError(
-        `Profile ${profile?.name} requests unavailable skills: ${missing.join(", ")}`,
+        chooser === "model"
+          ? `Unavailable skills: ${missing.join(", ")}`
+          : `Profile ${profile?.name} requests unavailable skills: ${missing.join(", ")}`,
       );
     parts.push(prompt);
   }
@@ -195,22 +208,26 @@ export async function resolveSpawn(
   ctx: ExtensionContext,
   sources: SpawnSources,
 ): Promise<SpawnSpec> {
-  request = normalizeSpawnRequest(request);
   const trusted = isTrusted(ctx);
-  const cwd = resolveCwd(sources.cwd ?? ctx.cwd, request.cwd ?? undefined);
-  const profile = resolveProfile(request.profile ?? undefined, cwd, trusted);
-  const model = resolveModel(profile?.model, ctx, sources.model);
-  const thinking = profile?.thinking ?? sources.thinking;
+  const cwd = resolveCwd(sources.cwd ?? ctx.cwd, request.cwd);
+  const profile = resolveProfile(request.profile, cwd, trusted);
+  const model = resolveModel(
+    request.model ?? profile?.model,
+    ctx,
+    sources.model,
+  );
+  const thinking = request.thinking ?? profile?.thinking ?? sources.thinking;
   if (thinking !== undefined && !isThinkingLevel(thinking))
     throw new AgentError(`Invalid thinking level: ${thinking}`);
-  const tools = profile?.tools ?? sources.tools;
+  const tools = request.tools ?? profile?.tools ?? sources.tools;
   const { instructions, ambientSkills } = await instructionsOf(
     profile,
+    request.skills,
     cwd,
     trusted,
     sources.skills,
   );
-  const spawn = profile?.spawn;
+  const spawn = request.spawn ?? profile?.spawn;
   return {
     job: request.job,
     cwd,
@@ -229,8 +246,8 @@ export async function resolveSpawn(
 /**
  * The settings of an agent that an agent spawns: resolved like the
  * parent's spawns, with the spawning agent's working directory, model, and
- * thinking level as defaults. Only its profile grants permission to spawn;
- * the spawning tool checks the depth.
+ * thinking level as defaults. Whether it may spawn comes from the request
+ * or its profile; the spawning tool checks the depth.
  */
 export async function resolveHelper(
   request: HelperRequest,
@@ -241,7 +258,12 @@ export async function resolveHelper(
   return resolveSpawn(
     {
       job: request.job,
+      ...(request.spawn !== undefined ? { spawn: request.spawn } : {}),
       ...(request.profile ? { profile: request.profile } : {}),
+      ...(request.model ? { model: request.model } : {}),
+      ...(request.thinking ? { thinking: request.thinking } : {}),
+      ...(request.tools ? { tools: request.tools } : {}),
+      ...(request.skills ? { skills: request.skills } : {}),
     },
     ctx,
     {

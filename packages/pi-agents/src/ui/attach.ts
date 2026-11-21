@@ -87,7 +87,6 @@ import {
   shortModel,
   statusIcon,
 } from "./format.js";
-import { FULLSCREEN_OVERLAY } from "./frame.js";
 import {
   firstLine,
   type MessageParts,
@@ -716,14 +715,6 @@ class AgentPane implements Component {
   /** Where the last frame showed the transcript, for clicks. */
   private window: TranscriptWindow | undefined;
 
-  get focused(): boolean {
-    return this.editor.focused;
-  }
-
-  set focused(value: boolean) {
-    this.editor.focused = value;
-  }
-
   constructor(
     private readonly tui: TUI,
     private readonly theme: Theme,
@@ -843,10 +834,6 @@ class AgentPane implements Component {
   }
 
   private close(): void {
-    if (this.interrupting) {
-      this.showFlash("Wait for the interrupt to finish before leaving.");
-      return;
-    }
     this.dispose();
     this.options.done();
   }
@@ -876,7 +863,7 @@ class AgentPane implements Component {
       // Results wait while the user is attached, and while Pi works.
       info.queued ? QUEUED_NOTE : undefined,
     ].filter(Boolean);
-    return ` Agents › ${parts.join(" ")} `;
+    return ` ${parts.join(" ")} `;
   }
 
   private windowTranscript(lines: string[], rows: number): string[] {
@@ -929,20 +916,15 @@ class AgentPane implements Component {
     }
     const statusLines = stalled
       ? [
-          color(
+          "",
+          ` ${color(
             "warning",
-            "⚠ Stalled: this pi-agents version can't run its work",
-          ),
+            "⚠ Stalled: this pi-agents version can't run its work (esc to interrupt)",
+          )}`,
         ]
       : this.loader
         ? this.loader.render(width)
-        : [];
-    statusLines.push(
-      color(
-        "dim",
-        `← / ctrl+d overview (empty) · esc ${info?.state === "working" ? "interrupt" : "overview"} · ctrl+o expand`,
-      ),
-    );
+        : ["", ` ${color("dim", "esc back")}`];
     const error = info?.state === "failed" ? turnResult(info).error : undefined;
     const failure =
       error !== undefined ? [color("error", `⊗ ${oneLine(error, width)}`)] : [];
@@ -951,12 +933,11 @@ class AgentPane implements Component {
         ? [color("warning", `⚠ Compaction failed: ${info.compactionFailure}`)]
         : [];
     const flash = this.flash ? [color("error", `⚠ ${this.flash.text}`)] : [];
-    const heading = fitLine(
-      `${info ? statusIcon(info, color) : ""}${this.header(info)}`,
-      width,
-    );
+    // An unlabelled rule like the editor's bottom border sets the pane off
+    // from Pi above; the editor's badge stays the only label.
+    const separator = this.theme.fg("borderMuted", "─".repeat(width));
     const rows = this.tui.terminal?.rows ?? 24;
-    const budget = Math.max(4, rows);
+    const budget = Math.max(4, rows - 6);
     const fixed =
       1 +
       editorLines.length +
@@ -979,11 +960,9 @@ class AgentPane implements Component {
       this.chat.transcript.render(width),
       Math.max(1, content - queued.length),
     );
-    const padding = Math.max(0, content - queued.length - transcript.length);
     return [
-      heading,
+      separator,
       ...transcript.map((line) => fitLine(line, width)),
-      ...Array.from({ length: padding }, () => ""),
       ...statusLines.map((line) => fitLine(line, width)),
       ...failure.map((line) => fitLine(line, width)),
       ...compaction.map((line) => fitLine(line, width)),
@@ -1051,7 +1030,7 @@ class AgentPane implements Component {
   }
 }
 
-/** Attach to an agent in a full-screen overlay until the user detaches. */
+/** Attach to an agent in the editor slot until the user detaches. */
 export async function openAgentPane(
   ctx: ExtensionContext,
   service: AgentService,
@@ -1070,7 +1049,6 @@ export async function openAgentPane(
           conversation,
           done: () => done(undefined),
         }),
-      FULLSCREEN_OVERLAY,
     );
   } finally {
     ctx.ui.setWorkingVisible(true);

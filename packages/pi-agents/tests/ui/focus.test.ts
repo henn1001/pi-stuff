@@ -63,54 +63,15 @@ function setup(state: {
 }
 
 describe("focus", () => {
-  test("detaching releases deliveries before reopening the selected agent in the overview", async () => {
-    let close: (() => void) | undefined;
-    const events: string[] = [];
-    const service = { view: async () => ({}) } as unknown as AgentService;
-    const host = { current: () => service } as unknown as SessionHost;
-    const panel = {
-      setFocused: () => {},
-      setSuppressed: (value: boolean) => events.push(`suppressed:${value}`),
-    } as unknown as AgentPanel;
-    const ctx = {
-      mode: "tui",
-      ui: {
-        onTerminalInput: () => () => {},
-        setWorkingVisible: () => {},
-        custom: () =>
-          new Promise<void>((resolve) => {
-            close = resolve;
-          }),
-      },
-    } as unknown as ExtensionContext;
-    const focus = new FocusController(host, panel);
-    focus.onPaneClosed = () => events.push("deliver");
-    focus.onBrowse = (_ctx, select) => events.push(`browse:${select}`);
-    focus.install(ctx);
-    focus.attach(ctx, "7");
-    await Promise.resolve();
-    expect(focus.isPaneOpen()).toBe(true);
-    close?.();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(focus.isPaneOpen()).toBe(false);
-    expect(events).toEqual([
-      "suppressed:true",
-      "suppressed:false",
-      "deliver",
-      "browse:agent:7",
-    ]);
-    focus.dispose();
-  });
-
-  test("← opens the overview when the summary shows agents", () => {
+  test("← focuses the panel when it shows agents", () => {
     const { press, focused, browsed } = setup({
       rows: true,
       agents: 2,
       suppressed: false,
     });
     expect(press(LEFT)).toEqual({ consume: true });
-    expect(focused).toEqual([]);
-    expect(browsed).toEqual([undefined]);
+    expect(focused).toEqual([true]);
+    expect(browsed).toEqual([]);
   });
 
   test.each([
@@ -146,16 +107,17 @@ describe("focus", () => {
     const press = (input: string) => {
       if (!ui.press(input)?.consume) editor.handleInput(input);
     };
+    press(LEFT);
     press(data);
     expect(editor.getText()).toBe(text);
-    expect(ui.press(LEFT)).toBeUndefined();
-    expect(ui.focused).toEqual([]);
+    expect(ui.focused).toEqual([true, false]);
     press("\r");
     expect(submitted).toEqual([text]);
   });
 
   test("terminal reports and key releases leave panel focus alone", () => {
     const ui = setup({ rows: true, agents: 2, suppressed: false });
+    ui.press(LEFT);
     for (const data of [
       "\u001b[I",
       "\u001b[O",
@@ -164,7 +126,7 @@ describe("focus", () => {
     ]) {
       expect(ui.press(data)).toBeUndefined();
     }
-    expect(ui.focused).toEqual([]);
+    expect(ui.focused).toEqual([true]);
   });
 
   test("← opens /agents when the panel is empty", () => {

@@ -20,17 +20,20 @@ import {
 } from "../agents/receipts.js";
 import { turnResult } from "../agents/report.js";
 import type { AgentService } from "../agents/service.js";
-import { prepareSpawnArguments } from "../agents/spawn-input.js";
 import {
   AgentError,
   type AgentInfo,
+  checkSpawnShape,
   GRAPH_SIZE,
   type GraphInfo,
   messageMode,
   type Target,
   type TargetRef,
+  THINKING_LEVELS,
   WaitInterrupted,
 } from "../agents/types.js";
+import { AGENT_TOOL_NAMES } from "../host/tools.js";
+import { StringEnum } from "../schema.js";
 import { graphShape, oneLine } from "../ui/format.js";
 import { PARENT_TOOL_VIEWS, positiveSeconds } from "../ui/tool-views.js";
 import {
@@ -399,13 +402,31 @@ const agentFields = {
   name: Type.Optional(
     Type.String({ description: "Short name, such as a role" }),
   ),
-  profile: Type.Optional(
-    Type.String({
+  profile: Type.Optional(Type.String({ description: "Profile name" })),
+  model: Type.Optional(
+    Type.String({ description: "Model, such as sonnet or opus" }),
+  ),
+  thinking: Type.Optional(
+    StringEnum(THINKING_LEVELS, { description: "Thinking level" }),
+  ),
+  tools: Type.Optional(
+    Type.Array(Type.String(), {
+      description: `Tool allowlist from: ${AGENT_TOOL_NAMES.join(", ")}. Defaults to your own tools among them. Agents also get every MCP tool and the extension tools the user shares, in any case`,
+    }),
+  ),
+  skills: Type.Optional(
+    Type.Array(Type.String(), {
       description:
-        "Available profile name; omit to inherit parent configuration",
+        "Skills to load in full instead of the skill catalog; [] for none",
     }),
   ),
   cwd: Type.Optional(Type.String({ description: "Working directory" })),
+  spawn: Type.Optional(
+    Type.Boolean({
+      description:
+        "Let this agent spawn agents of its own, which report back to it. Default false",
+    }),
+  ),
 };
 
 function describeTarget(service: AgentService, target: Target): string {
@@ -436,7 +457,7 @@ export function registerAgentTools(pi: ExtensionAPI, host: SessionHost): void {
         minItems: GRAPH_SIZE.min,
         maxItems: GRAPH_SIZE.max,
         description:
-          'Always an array, one entry per agent with its fields, also for a single agent: {"agents": [{"name": "lead", "job": "..."}]}',
+          'Always an array, one entry per agent with its fields, also for a single agent: {"agents": [{"name": "lead", "job": "...", "spawn": true}]}',
       },
     ),
     failFast: Type.Optional(
@@ -451,7 +472,7 @@ export function registerAgentTools(pi: ExtensionAPI, host: SessionHost): void {
       description:
         "Start one group of agents and return at once. Once all finished, the group's result arrives as one message that starts a new turn: the final messages of the agents that no other agent lists in after. For one merged answer, add an agent after the others that merges their results; for results that should arrive separately, call agent_spawn once per job.",
       parameters: spawnParams,
-      prepare: prepareSpawnArguments,
+      prepare: checkSpawnShape,
       output: GraphOutput,
       async execute(service, params, ctx) {
         const thinking = pi.getThinkingLevel();

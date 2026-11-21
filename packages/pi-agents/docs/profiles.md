@@ -35,18 +35,8 @@ Profile fields:
 | `spawn` | Whether agents of this profile may spawn agents of their own. Defaults to `false`. |
 | `maxTurns` | How many tool rounds one run of an agent may take. The round that reaches it still runs its tools, then the agent fails with `reached its turn limit`; press `r` in `/agents` to continue it for another run. Defaults to no limit. |
 
-The Markdown body extends the agent's system prompt. Model, thinking level,
-tool allowlist, skill selection, and spawn permission are configured only
-through profiles, not arguments to `agent_spawn`. Model, thinking, and tools
-omitted from a profile inherit the parent session's defaults. Spawn permission
-is never inherited: only a profile with `spawn: true` grants it, including
-for nested agents. Without a profile, agents use parent defaults but cannot
-spawn further agents.
-
-The system prompt lists usable profile names and descriptions, not models
-or profile settings. Pi must select a listed profile or omit `profile`; when
-none are available, the prompt explicitly tells it to omit the field rather
-than invent a name. The same applies to agents that spawn other agents.
+The Markdown body extends the agent's system prompt. Arguments that Pi passes
+to `agent_spawn` override profile settings.
 
 Pi-agents reads profiles from `~/.pi/agent/agents` and, for trusted
 projects, `.pi/agents` in the directory where you started Pi. Project
