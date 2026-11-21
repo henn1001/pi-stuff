@@ -126,7 +126,7 @@ class SkillDialog implements Focusable {
   private detailFocused = false;
   private detailPath?: string;
   private scroll = 0;
-  private previewLines: string[] = [];
+  private previewLines: readonly string[] = [];
   private previewEntry?: SkillEntry;
   private previewWidth = 0;
 
@@ -226,7 +226,7 @@ class SkillDialog implements Focusable {
     return frame(this.theme, width, body.slice(0, bodyRows), "Skills", !this.detailFocused);
   }
 
-  private buildPreviewLines(skill: SkillEntry, inner: number): string[] {
+  private buildPreviewLines(skill: SkillEntry, inner: number): readonly string[] {
     const root = new Container();
     root.addChild(new Text(this.theme.fg("text", this.theme.bold(skill.name)), 0, 0));
     root.addChild(
