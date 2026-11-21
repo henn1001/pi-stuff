@@ -118,12 +118,15 @@ function setup({ closed = false } = {}) {
   } as unknown as ExtensionContext;
   const panel = new AgentPanel(host);
   const focus = new FocusController(host, panel);
+  const browsed: ExtensionContext[] = [];
+  focus.onBrowse = (context) => browsed.push(context);
   panel.update(ctx);
   focus.install(ctx);
   tui.start();
   return {
     tui,
     editor,
+    browsed,
     panel,
     focus,
     ctx,
@@ -162,8 +165,8 @@ describe("real focus and overlay input dispatch", () => {
         ui.tui.addChild(ui.editor.component);
         ui.tui.setFocus(ui.editor.component);
         ui.press(LEFT);
-        expect(ui.panel.isFocused()).toBe(!closed);
-        expect(browsed).toEqual(closed ? [ui.ctx] : []);
+        expect(ui.panel.isFocused()).toBe(false);
+        expect(browsed).toEqual([ui.ctx]);
       } finally {
         ui.close();
       }
@@ -174,7 +177,7 @@ describe("real focus and overlay input dispatch", () => {
     const ui = setup();
     try {
       ui.press(LEFT);
-      expect(ui.panel.isFocused()).toBe(true);
+      expect(ui.browsed).toEqual([ui.ctx]);
       const picker = receiver("picker");
       const handle = ui.tui.showOverlay(picker.component);
       ui.press(LEFT);
@@ -186,7 +189,7 @@ describe("real focus and overlay input dispatch", () => {
       expect(handle.isFocused()).toBe(true);
       handle.hide();
       ui.press(LEFT);
-      expect(ui.panel.isFocused()).toBe(true);
+      expect(ui.browsed).toEqual([ui.ctx, ui.ctx]);
       expect(picker.inputs).toEqual([LEFT, RIGHT]);
     } finally {
       ui.close();
@@ -233,7 +236,7 @@ describe("real focus and overlay input dispatch", () => {
       expect(ui.editor.inputs).toEqual([LEFT]);
       expect(ui.panel.isFocused()).toBe(false);
       ui.press(LEFT);
-      expect(ui.panel.isFocused()).toBe(true);
+      expect(ui.browsed).toEqual([ui.ctx]);
       expect(picker.inputs).toEqual([LEFT]);
       visible = true;
       ui.press(RIGHT);
@@ -242,7 +245,7 @@ describe("real focus and overlay input dispatch", () => {
       handle.setHidden(true);
       expect(ui.tui.hasOverlay()).toBe(false);
       ui.press(LEFT);
-      expect(ui.panel.isFocused()).toBe(true);
+      expect(ui.browsed).toEqual([ui.ctx, ui.ctx]);
       expect(picker.inputs).toEqual([LEFT, RIGHT]);
       handle.setHidden(false);
       ui.press(RIGHT);
@@ -268,7 +271,7 @@ describe("real focus and overlay input dispatch", () => {
       expect(decoration.inputs).toEqual([]);
       handle.hide();
       ui.press(LEFT);
-      expect(ui.panel.isFocused()).toBe(true);
+      expect(ui.browsed).toEqual([ui.ctx]);
       expect(ui.editor.inputs).toEqual([LEFT]);
     } finally {
       ui.close();

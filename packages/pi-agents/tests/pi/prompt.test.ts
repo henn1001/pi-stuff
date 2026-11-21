@@ -9,6 +9,7 @@ import {
   resultContent,
 } from "../../src/pi/messages.js";
 import {
+  buildProfilesPrompt,
   buildSystemPromptAppendix,
   guidance,
   profileCatalog,
@@ -50,65 +51,48 @@ describe("system prompt appendix", () => {
     ]);
     const appendix = buildSystemPromptAppendix(profiles);
     expect(appendix).toBe(
-      [
-        guidance(),
-        "<agent_profiles>",
-        '  <profile name="scout" thinking="low">Finds code</profile>',
-        "</agent_profiles>",
-      ].join("\n"),
+      [guidance(), buildProfilesPrompt(profiles)].join("\n"),
     );
-    expect(
-      buildSystemPromptAppendix([], [
-        {
-          model: {
-            provider: "anthropic",
-            id: "claude-sonnet-5-5",
-            name: "Claude Sonnet 5.5",
-            contextWindow: 1_000_000,
-            cost: { input: 2, output: 10 },
-          },
-        },
-        {
-          model: { provider: "openai-codex", id: "gpt-6.1-sol" },
-          thinkingLevel: "high",
-        },
-      ] as never),
-    ).toBe(
-      [
-        guidance(),
-        '<agent_models note="cost in USD per million input/output tokens">',
-        '  <model id="anthropic/claude-sonnet-5-5" name="Claude Sonnet 5.5" context="1M" cost="2/10"/>',
-        '  <model id="openai-codex/gpt-6.1-sol" thinking="high"/>',
-        "</agent_models>",
-      ].join("\n"),
+    const empty = buildSystemPromptAppendix([]);
+    expect(empty).toContain(
+      "If no profiles are available, omit the profile in agent_spawn calls.",
     );
-    expect(buildSystemPromptAppendix([])).toBe(guidance());
+    expect(empty).toContain("<agent_profiles>\n</agent_profiles>");
+    expect(empty).toContain("never invent a profile name");
+    expect(empty).not.toContain("<agent_models");
   });
 
   test("a single-shot run waits for the results it needs", () => {
     expect(guidance()).toContain("end your turn");
     expect(guidance()).not.toContain("This run ends with your answer");
-    expect(buildSystemPromptAppendix([], [], true)).toBe(guidance(true));
+    expect(buildSystemPromptAppendix([], true)).toContain(guidance(true));
     expect(guidance(true)).toContain(
       "call agent_wait for the results you need before you answer",
     );
     expect(guidance(true)).not.toContain("end your turn");
   });
 
-  test("profiles name their skills", () => {
+  test("profiles expose only names and descriptions", () => {
     const appendix = buildSystemPromptAppendix([
       {
         name: "reviewer",
         description: "Reviews diffs",
         skills: ["code-review", "unslop"],
+        model: "openai/private-model",
+        thinking: "high",
+        tools: ["read"],
         instructions: "",
         source: "user",
         filePath: "/reviewer.md",
       },
     ]);
     expect(appendix).toContain(
-      '<profile name="reviewer" skills="code-review,unslop">Reviews diffs</profile>',
+      '<profile name="reviewer">Reviews diffs</profile>',
     );
+    expect(appendix).not.toContain("private-model");
+    expect(appendix).not.toContain("skills=");
+    expect(appendix).not.toContain("thinking=");
+    expect(appendix).not.toContain("tools=");
   });
 });
 

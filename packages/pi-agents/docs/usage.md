@@ -1,5 +1,12 @@
 # Usage
 
+pi-agents starts disabled: its tools and system-prompt section are absent.
+Start Pi with `--agents`, run `/agents enable`, or open `/agents` (Ctrl+Q)
+and confirm to activate it. The flag also enables sessions opened or created
+while Pi is running. Activation lasts for the session, including reloads and
+later resumes without the flag. There is no disable command; new sessions
+start disabled without the flag.
+
 Every agent keeps its conversation. Open `/agents`, pick any agent, even one
 that finished hours ago, and keep talking to it like a regular Pi session.
 Ask Pi to start agents: [see the example prompts](../README.md#-usage).
@@ -67,7 +74,7 @@ An agent whose unfinished work this version of pi-agents can't run shows
 Agents use `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`, and
 `codemode`, plus your context files such as `AGENTS.md` and
 [skills](#skills). They inherit your active tools from this set unless a
-profile or spawn specifies others.
+profile specifies others.
 
 Every agent also gets the tools of your MCP servers and of the extensions
 you [share with agents](./configuration.md#extension-tools), such as
@@ -104,14 +111,9 @@ Agents don't get skills that exist only in the running session: those from
 extensions. `--no-skills` doesn't apply to agents either. Agents pick up new
 or changed skills after `/reload`.
 
-To focus an agent, name its skills:
-
-```text
-Have an agent write the release notes with the technical-writing skill.
-```
-
-Pi then passes `skills` to the agent, which gets those skills in full instead
-of the whole catalog. An empty list gives it none.
+To focus an agent, set `skills` in a [profile](./profiles.md).
+The agent gets those skills in full instead of the whole catalog.
+An empty list in the profile gives it none. The spawn tool cannot select skills.
 
 Skills marked `disable-model-invocation: true` stay yours: Pi doesn't see
 them, so it can't hand them to agents either. To give agents such a skill,
@@ -142,10 +144,10 @@ A line above the editor shows how many agents are in each state:
 ◉ 3 working ⊗ 1 failed · ← agents
 ```
 
-Press ← in an empty editor, Ctrl+Q, or click the line to focus the panel.
-It shows open agents and graphs, with their states, elapsed time, usage,
-and progress. Graphs and spawned agents appear as trees; `after` names an
-agent's dependencies:
+Press ← in an empty editor, Ctrl+Q, or click the line to open the full-screen
+agent overview. It shows agents and graphs, including finished ones, with
+their states, elapsed time, usage, and progress. Graphs and spawned agents
+appear as trees; `after` names an agent's dependencies:
 
 ```text
 ◉ reviewer explorer terra 1m32s 15.5k Using grep
@@ -157,26 +159,27 @@ agent's dependencies:
 └─ ○ merge after all opus
 ```
 
-Agents and groups leave the panel once their results reach whoever spawned
-them. Until Pi or the spawning agent can take a result, the panel shows
-`◐ result queued`. Failed and interrupted agents stay until stopped.
+Until Pi or the spawning agent can take a result, the overview shows
+`◐ result queued`. The summary line counts open agents; the overview also
+retains finished agents. These shortcuts apply only while Pi's prompt editor
+has focus.
 
-When no agents are open, ← and Ctrl+Q open `/agents` instead. These
-shortcuts apply only while Pi's prompt editor has focus.
-
-In the focused panel:
+In the overview:
 
 | Key | Action |
 | --- | --- |
 | ↑ ↓ | Select an agent or graph. |
 | Space | Fold or unfold a graph, or the agents an agent spawned. On a row inside one, fold what it sits in. |
 | ⏎ | Attach to the agent, or to a graph's first agent. |
-| Click | Attach like ⏎; a message attaches to its recipient. Needs Pi's fullscreen mode, its default. |
-| Tab | Open `/agents` at the same row. Tab cycles the panel, `/agents`, and `/messages`; Shift+Tab goes back. |
+| Tab or Shift+Tab | Switch to `/agents messages`, retaining its selection and filters. |
+| `m` | Open messages involving the selected agent; Ctrl+X there shows all agents. |
+| `r` | Continue a failed or interrupted agent. |
 | `s` | Stop the agent, or the graph with its agents. Pi asks first when it still works. |
-| Esc or → | Go back to the editor. Other keys go back too and act there, so typed or pasted text lands in the editor. |
+| Esc | Return to the main agent. |
 
-Attaching opens the agent's conversation. A `codemode` call shows its
+Attaching opens the agent's full-screen conversation. Detaching returns to
+the overview with that agent selected; Esc there returns to the main agent.
+A `codemode` call shows its
 script, then each tool call the script made with its status, as the calls
 run and after the script finished, and then the script's output. The
 editor names the agent and sends your input to it:
@@ -185,10 +188,10 @@ editor names the agent and sends your input to it:
 | --- | --- |
 | ⏎ | Prompt an idle agent or steer a working one. An agent that waits for the agents its job needs takes input once it starts. |
 | Alt+⏎ | Queue a follow-up after the current answer. |
-| Esc | Interrupt a working agent; queued messages return to the editor. Go back from an idle one when the editor is empty. |
+| Esc | Interrupt a working agent; queued messages return to the editor. Return to the overview from an idle one when the editor is empty. |
 | Ctrl+O | Expand or collapse all tool output and messages. |
 | Click | Expand or collapse one tool result or message, as in Pi. Click the newer-lines note to jump back to new output. Needs fullscreen mode. |
-| ← or Ctrl+D | Detach when the editor is empty. |
+| ← or Ctrl+D | Detach to the overview when the editor is empty. |
 | Shift+↑ ↓, Shift+PgUp/PgDn | Scroll. Earlier entries load as you reach the top. |
 | Mouse wheel | Scroll in fullscreen mode, with the pointer over the attached view. |
 
@@ -220,9 +223,10 @@ the new session.
 
 | Command | Action |
 | --- | --- |
-| `/agents` | Browse all agents and graphs, including ended ones, with their jobs and latest results. Attach to, fold, continue, or stop them. |
-| `/agent <name>` | Attach to an agent. |
-| `/messages` | Read and filter the messages agents sent each other, newest first. |
+| `/agents` | Confirm activation if disabled; otherwise browse agents and graphs. Attach to, fold, continue, or stop them. |
+| `/agents enable` | Enable for this session without opening the overview; also available outside the terminal UI. |
+| `/agents attach <name>` | Attach to an agent. |
+| `/agents messages` | Read and filter the messages agents sent each other, newest first. |
 
 ## Tools
 
@@ -230,14 +234,19 @@ Pi uses these tools to work with agents:
 
 | Tool | Purpose |
 | --- | --- |
-| `agent_spawn` | Start one group of 1 to 12 agents, optionally with `after` dependencies or permission to spawn. |
+| `agent_spawn` | Start one group of 1 to 12 agents, optionally with `after` dependencies and a profile. |
 | `agent_send` | Message an agent: prompt, steer, queue a follow-up, or interrupt its work first. |
 | `agent_wait` | Block until agents or groups answer and return their results. |
 | `agent_status` | Show agent and group states. |
 | `agent_stop` | Stop an agent or a group. |
 
 `agent_spawn` always takes an `agents` list, even for one agent. Each entry
-uses `job` for its instructions and may set `spawn: true` to permit children.
+uses `job` for its instructions and may select a `profile`.
+Optional string fields in `agent_spawn` treat `null`, empty strings, and
+whitespace-only strings as omitted, so normal defaults apply. Select a
+`profile` for model, thinking, tools, skills, or permission to spawn; those
+fields are not spawn arguments. Omit `profile` to inherit the parent
+configuration without permission to spawn further agents.
 Use `after` with names from the same call to make a dependency graph:
 
 ```json
@@ -249,11 +258,8 @@ Use `after` with names from the same call to make a dependency graph:
 }
 ```
 
-To permit recursive spawning:
-
-```json
-{ "agents": [{ "name": "scout", "job": "Map the API surface.", "spawn": true }] }
-```
+To permit recursive spawning, select a [profile](./profiles.md) that sets
+`spawn: true`. The tool call itself cannot grant or revoke that permission.
 
 `agent_spawn` and `agent_send` return at once. Each spawn owns one group and
 reports one result to its caller: Pi receives a message starting its next turn,

@@ -8,7 +8,7 @@ Agents in one Pi session can send each other one-way messages.
   src="../demo/messaging.gif"
   width="840"
   alt="Scout messages fixer about a concurrency bug, fixer patches it and
-    replies, and Pi browses their exchange in /messages and attaches to both
+    replies, and Pi browses their exchange in /agents messages and attaches to both
     agents"
 >
 
@@ -28,14 +28,14 @@ until you or Pi message it again. An agent that still waits for the agents
 its job needs refuses them until it starts.
 
 Messages appear in your transcript, but Pi's model doesn't see them.
-The focused panel shows queued messages. Use ↑↓ to select one, ⏎ to
-attach to its recipient, or `m` to open `/messages` at that message.
-On an agent row, `m` filters messages by that agent's name.
+In the agent overview, `m` opens `/agents messages` scoped to the selected
+agent's identity. Tab or Shift+Tab switches between the full-screen agent
+and message overviews, preserving selection, scroll and filters.
 
-`/messages` shows every message in one stream, newest first, one line each:
+`/agents messages` shows messages in one stream, newest first, one line each:
 
 ```text
-╭─ Messages (3) ───────────────────────────────────────────────────────╮
+╭─ Agents  [Messages] (3) ─────────────────────────────────────────────╮
 │   14:33:46 gamma → beta Serve wraps                                  │
 │   14:33:17 beta → alpha Location proposal: reserve the central lawn… │
 │ ▸ 14:32:47 alpha → gamma Offer two inclusive picnic activities:      │
@@ -44,13 +44,16 @@ On an agent row, `m` filters messages by that agent's name.
 │                                                                      │
 │ - a relaxed nature-scavenger hunt with seated options                │
 │ - a collaborative mural                                              │
-╰─ ↑↓ move · ⏎ close · ← alpha · → gamma · tab panel · esc close ──────╯
+╰─ esc close · tab /agents · type to filter · ⏎ close · ← alpha · → gamma ╯
 ```
 
-Type to filter by text or agent name. ⏎ expands or collapses the selected
-message, ← attaches to the sender, and → to the recipient. Esc closes the
-message, then clears the filter, then closes `/messages`. Dropped messages
-appear in red. A session keeps its latest 1,000 messages.
+Type to filter by text or agent name. Ctrl+X clears an agent scope without
+clearing the text filter. ⏎ expands or collapses the selected message, ←
+attaches to the sender, and → to the recipient. Detaching returns to the
+agent overview; switching back to messages restores the selected message.
+Esc closes the message, then clears the text filter, then returns to the main
+agent. Dropped messages appear in red. A session keeps its latest 1,000
+messages.
 
 ## Guarantees
 

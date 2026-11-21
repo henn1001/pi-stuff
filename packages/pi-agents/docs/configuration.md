@@ -5,14 +5,15 @@ many agents work at once, and show agent counts in the footer.
 
 ## Models
 
-An agent runs on your session's model unless Pi or a profile picks another.
+An agent runs on your session's model unless its profile specifies another.
 Models resolve like `pi --model`: `sonnet` picks the newest Sonnet you have
 credentials for, and an exact ID such as `claude-sonnet-4-6` picks that
 version. Run `pi --list-models` to see what's available.
 
-Pi learns which names are models from your scoped models, the ones you pick
-with `/scoped-models` or `--models`. Scope the models you want agents to use,
-and Pi picks them by name: "spawn a Luna agent" runs on your scoped Luna.
+Set `model` in an [agent profile](./profiles.md) to use another model.
+Pi sees available profile names and descriptions, not a model catalog.
+`agent_spawn` selects a profile or inherits the parent configuration; it
+cannot select a model or thinking level directly.
 
 ## Settings from other extensions
 

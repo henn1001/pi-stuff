@@ -13,6 +13,26 @@ import {
 } from "@earendil-works/pi-tui";
 import { type Colorize, plainColorize, sanitizeLine } from "./format.js";
 
+/** Shared placement for Agents, Messages, and the attach view. */
+export const FULLSCREEN_OVERLAY = {
+  overlay: true,
+  overlayOptions: {
+    width: "100%",
+    maxHeight: "100%",
+    anchor: "top-left",
+  },
+} as const;
+
+/** Pad a boxed full-screen view up to its footer row. */
+export function padFrame(
+  lines: string[],
+  terminalRows: number,
+  width: number,
+  color: Colorize,
+): void {
+  while (lines.length < terminalRows - 1) lines.push(boxLine("", width, color));
+}
+
 /** Rows of the frame: title border, separator, footer border, blank row. */
 const CHROME_ROWS = 4;
 
@@ -98,12 +118,12 @@ function renderMarkdown(
 export function paneLayout(
   terminalRows: number,
   items: number,
+  fullscreen = false,
 ): { tableRows: number; detailRows: number } {
-  const height = Math.max(
-    8,
-    Math.min(terminalRows - 6, Math.floor(terminalRows * 0.8)),
-  );
-  const available = Math.max(2, height - CHROME_ROWS);
+  const height = fullscreen
+    ? terminalRows
+    : Math.max(8, Math.min(terminalRows - 6, Math.floor(terminalRows * 0.8)));
+  const available = Math.max(2, height - (fullscreen ? 3 : CHROME_ROWS));
   const tableRows = Math.min(items, Math.max(1, Math.ceil(available / 2)));
   return { tableRows, detailRows: Math.max(0, available - tableRows) };
 }

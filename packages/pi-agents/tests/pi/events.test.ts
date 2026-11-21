@@ -121,6 +121,16 @@ describe("child-agent lifecycle protocol", () => {
       };
       const runtime = await createAgentSessionRuntime(
         async ({ cwd, sessionManager, sessionStartEvent }) => {
+          if (
+            !sessionManager
+              .getEntries()
+              .some(
+                (entry) =>
+                  entry.type === "custom" &&
+                  entry.customType === "pi-agents-enabled",
+              )
+          )
+            sessionManager.appendCustomEntry("pi-agents-enabled", {});
           const services = await createAgentSessionServices({
             cwd,
             settingsManager: SettingsManager.inMemory(),

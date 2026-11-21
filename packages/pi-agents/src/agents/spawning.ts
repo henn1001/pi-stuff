@@ -42,7 +42,6 @@ import {
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import { type Static, Type } from "typebox";
-import { StringEnum } from "../schema.js";
 import { GraphTask, NodeTask } from "./graphs.js";
 import type { MessagingHub } from "./hub.js";
 import { UNBOUNDED_OUTPUT } from "./messaging.js";
@@ -56,6 +55,7 @@ import {
   isSpawned,
 } from "./records.js";
 import { graphReport } from "./report.js";
+import { prepareSpawnArguments } from "./spawn-input.js";
 import {
   activeHelpers,
   errorText,
@@ -73,13 +73,11 @@ import {
 import { endNodes } from "./topology.js";
 import {
   AgentError,
-  checkSpawnShape,
   GRAPH_SIZE,
   type GraphPolicy,
   type HelperResolver,
   isThinkingLevel,
   MAX_DEPTH,
-  THINKING_LEVELS,
 } from "./types.js";
 
 export const SPAWN_TOOL = "agent_spawn";
@@ -126,27 +124,10 @@ const agentFields = Type.Object({
         "Names of agents in this call whose final messages this agent needs; it starts once they finished. Agents without after start at once",
     }),
   ),
-  profile: Type.Optional(Type.String({ description: "Profile name" })),
-  model: Type.Optional(Type.String({ description: "Model" })),
-  thinking: Type.Optional(
-    StringEnum(THINKING_LEVELS, { description: "Thinking level" }),
-  ),
-  tools: Type.Optional(
-    Type.Array(Type.String(), {
+  profile: Type.Optional(
+    Type.String({
       description:
-        "Tool allowlist, from your own tools. Agents also get every MCP tool and the extension tools the user shares, in any case",
-    }),
-  ),
-  skills: Type.Optional(
-    Type.Array(Type.String(), {
-      description:
-        "Skills to load in full instead of the skill catalog; [] for none",
-    }),
-  ),
-  spawn: Type.Optional(
-    Type.Boolean({
-      description:
-        "Let this agent spawn agents of its own, which report back to it. Default false",
+        "Available profile name; omit to inherit parent configuration",
     }),
   ),
 });
@@ -162,7 +143,7 @@ const spawnParameters = Type.Object({
     minItems: GRAPH_SIZE.min,
     maxItems: GRAPH_SIZE.max,
     description:
-      'Always an array, one entry per agent with its fields, also for a single agent: {"agents": [{"name": "lead", "job": "...", "spawn": true}]}',
+      'Always an array, one entry per agent with its fields, also for a single agent: {"agents": [{"name": "lead", "job": "..."}]}',
   }),
   failFast: Type.Optional(
     Type.Boolean({ description: "Stop the other agents when one fails" }),
@@ -194,11 +175,6 @@ type SpawnArgs = {
     name?: string;
     after?: string[];
     profile?: string;
-    model?: string;
-    thinking?: string;
-    tools?: string[];
-    skills?: string[];
-    spawn?: boolean;
   }>;
   failFast?: boolean;
 };
@@ -477,15 +453,12 @@ async function spawnExecute(
         agent.callable,
         always,
       );
-      // Only the call grants spawning, not a profile the model picked,
-      // and never beyond the deepest level.
-      for (const [index, helper] of planned.helpers.entries()) {
-        const asked = args.agents[index]?.spawn === true;
-        if (asked && allowed.depth + 1 >= MAX_DEPTH)
+      // Profile permission never bypasses the maximum nesting depth.
+      for (const helper of planned.helpers) {
+        if (helper.spec.spawn && allowed.depth + 1 >= MAX_DEPTH)
           throw new AgentError(
             `${helper.name} can't spawn agents: agents at depth ${MAX_DEPTH} can't, and it would be at depth ${allowed.depth + 1}.`,
           );
-        helper.spec = { ...helper.spec, spawn: asked };
       }
     } catch (error) {
       return textResult(errorText(error), true);
@@ -847,7 +820,7 @@ export function spawningTools(options: SpawningOptions): ToolRegistration[] {
         "Spawn one group of agents and return at once. Once all finished, the group's result arrives as one [results] input, or from agent_wait: the final messages of the agents that no other agent lists in after. For one merged answer, add an agent after the others that merges their results; for results that should arrive separately, call agent_spawn once per job.",
       parameters: spawnParameters,
       structuredOutputSchema: SpawnOutput,
-      prepareArguments: (args) => checkSpawnShape(args) as never,
+      prepareArguments: (args) => prepareSpawnArguments(args) as never,
       // A rerun finds the group the interrupted call started.
       replay: "safe",
       outputLimits: UNBOUNDED_OUTPUT,

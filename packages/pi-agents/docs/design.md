@@ -62,6 +62,14 @@ An agent is a named conversation, not a single job. Keeping the conversation
 after it answers lets users follow up without reconstructing its context.
 Jobs must be self-contained: agents don't see the parent's conversation.
 
+Spawning describes work and its dependencies; profiles own model, thinking,
+tool, and skill configuration, as well as permission to spawn. Without a profile, agents inherit their
+parent's defaults. Keeping configuration out of spawn arguments prevents
+models from inventing configuration or accidentally disabling tools and
+skills with empty lists. Prompts expose only usable profile names and
+descriptions, explicitly requiring omission when none are available, rather
+than advertising a model catalog.
+
 A group composes agents without changing them. Dependency edges carry final
 messages, and the group's end nodes provide its result. Agents outlive their
 groups and can continue working independently.
@@ -99,8 +107,8 @@ message the same agents again.
 
 Agents that may spawn handle work whose shape emerges during a job, such
 as one agent per discovered file. They use the parent's tools, and their
-groups report to them the way Pi's groups report to Pi. Permission is
-explicit and doesn't pass down unless asked for, and nesting stops after
+groups report to them the way Pi's groups report to Pi. Permission comes
+only from the selected profile, never a tool argument or inheritance, and nesting stops after
 three agent levels, so the tree stays bounded. Each agent may spawn at most
 24 children over its lifetime. Completed and cancelled children still count:
 this intentional, nonreplenishing budget bounds total fan-out, not just

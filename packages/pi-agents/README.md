@@ -7,7 +7,7 @@ live, talk to it, or stop it. Agents survive crashes and restarts.
 <table>
   <tr>
     <td width="50%"><img src="demo/agents.gif" alt="Pi starts an audit graph on three models whose reviewers delegate one helper per file, shows the live tree and the merged findings, browses the results in /agents, and spawns three agents that tell jokes"></td>
-    <td width="50%"><img src="demo/messaging.gif" alt="Scout messages fixer about a concurrency bug, fixer patches it and replies, and Pi browses their exchange in /messages and attaches to both agents"></td>
+    <td width="50%"><img src="demo/messaging.gif" alt="Scout messages fixer about a concurrency bug, fixer patches it and replies, and Pi browses their exchange in /agents messages and attaches to both agents"></td>
   </tr>
   <tr>
     <td align="center">
@@ -28,6 +28,12 @@ pi install npm:pi-agents
 ```
 
 ## ✨ Usage
+
+Start Pi with `--agents` or run `/agents enable` to opt in for the current
+session, then ask Pi to delegate.
+Until enabled, pi-agents adds no tools or system-prompt section. Activation
+survives reloads and resuming the session; new sessions start disabled.
+You can also open `/agents` or press Ctrl+Q and confirm activation.
 
 ```text
 Have an agent review src/run for error handling while we keep going.
@@ -64,7 +70,7 @@ extension tools you share with them:
 │ ╭┤ ◆ Pi session:    │ │ ◇ optional         │ │ ▤ panel        │      │
 │ ┊│   MCP, extension │ │   extensions, e.g. │ │ ⇄ attach view  │      │
 │ ┊│   tools          │ │   pi-service-tier  │ │ ≡ /agents      │      │
-│ ┊│                  │ │                    │ │ ✉ /messages    │      │
+│ ┊│                  │ │                    │ │ ✉ messages     │      │
 │ ┊╰───┬─────────▲────╯ ╰─────────┬──────────╯ ╰────────▲───────╯      │
 │ ┊    │ agent_* │ results        ╎ hooks: capture at   │              │
 │ ┊    │         │                ╎ spawn, hold calls,  │              │

@@ -2,8 +2,8 @@
  * The split-pane overlay behind /agents: a keyboard-navigable table on top
  * and the selected item's details below, wrapped to the pane width.
  *
- * It replaces the composer in the editor slot (like Pi's /settings and
- * /model selectors) rather than floating over the transcript.
+ * The agent overview covers the terminal; other uses can replace the
+ * composer in the editor slot.
  *
  *   ╭─ Agents (1/2) ───────────────────────────────────╮
  *   │ ▸ ◉ reviewer  explorer  terra  15.5k             │
@@ -32,7 +32,9 @@ import {
   clamp,
   type DetailLine,
   edgeLine,
+  FULLSCREEN_OVERLAY,
   fitHints,
+  padFrame,
   paneLayout,
   renderDetail,
   windowDetail,
@@ -45,8 +47,19 @@ const REFRESH_MS = 500;
 type OverlayAction = "close" | { select: string } | undefined;
 
 /** What the overlay shows and does; items are re-read every render. */
+export interface OverlayState {
+  selectedKey?: string;
+  selectedIndex?: number;
+  detailOffset?: number;
+  detailAnchor?: string;
+  detailFloor?: number;
+}
+
 export interface OverlaySpec<T> {
   title: string;
+  /** Cover the terminal and retain navigation state across visits. */
+  fullscreen?: boolean;
+  state?: OverlayState;
   /** Shown when items() is empty. */
   emptyText: string;
   /** Key hints embedded in the bottom border, read on every render. */
@@ -89,19 +102,26 @@ class SplitPaneOverlay<T> implements Component {
     private readonly spec: OverlaySpec<T>,
     private readonly done: () => void,
   ) {
-    this.selectedKey = spec.initialKey;
+    this.selectedKey = spec.initialKey ?? spec.state?.selectedKey;
+    this.detailOffset = spec.state?.detailOffset ?? 0;
+    this.detailAnchor = spec.state?.detailAnchor;
+    this.detailFloor = spec.state?.detailFloor ?? 0;
   }
 
   private index(items: T[]): number {
     const index = items.findIndex(
       (item) => this.spec.keyOf(item) === this.selectedKey,
     );
-    return index >= 0 ? index : 0;
+    return index >= 0
+      ? index
+      : clamp(this.spec.state?.selectedIndex ?? 0, 0, items.length - 1);
   }
 
   private select(items: T[], index: number): void {
-    const item = items[clamp(index, 0, items.length - 1)];
+    const selected = clamp(index, 0, items.length - 1);
+    const item = items[selected];
     this.selectedKey = item === undefined ? undefined : this.spec.keyOf(item);
+    if (this.spec.state) this.spec.state.selectedIndex = selected;
   }
 
   private syncTimer(): void {
@@ -125,20 +145,25 @@ class SplitPaneOverlay<T> implements Component {
     const { color, spec } = this;
     const items = spec.items();
     this.syncTimer();
-    if (items.length === 0)
-      return [
+    if (items.length === 0) {
+      const lines = [
         edgeLine(["╭", "╮"], color("accent", spec.title), width, color),
         boxLine(color("dim", spec.emptyText), width, color),
-        edgeLine(["╰", "╯"], color("dim", this.footer(width)), width, color),
-        "",
       ];
+      if (spec.fullscreen)
+        padFrame(lines, this.tui.terminal.rows, width, color);
+      lines.push(
+        edgeLine(["╰", "╯"], color("dim", this.footer(width)), width, color),
+      );
+      if (!spec.fullscreen) lines.push("");
+      return lines;
+    }
     const index = this.index(items);
     this.select(items, index);
     const item = items[index] as T;
-    const { tableRows, detailRows } = paneLayout(
-      this.tui.terminal.rows,
-      items.length,
-    );
+    const { tableRows, detailRows } = spec.fullscreen
+      ? paneLayout(this.tui.terminal.rows, items.length, true)
+      : paneLayout(this.tui.terminal.rows, items.length);
 
     const lines = [
       edgeLine(
@@ -198,11 +223,16 @@ class SplitPaneOverlay<T> implements Component {
           ? edgeLine(["├", "┤"], line.divider, width, color)
           : boxLine(line.text, width, color),
       );
-    for (let i = shown.length; i < this.detailFloor; i++)
+    for (
+      let i = shown.length;
+      i < (spec.fullscreen ? detailRows : this.detailFloor);
+      i++
+    )
       lines.push(boxLine("", width, color));
 
     const hints = this.footer(width, maxOffset > 0);
-    lines.push(edgeLine(["╰", "╯"], color("dim", hints), width, color), "");
+    lines.push(edgeLine(["╰", "╯"], color("dim", hints), width, color));
+    if (!spec.fullscreen) lines.push("");
     return lines;
   }
 
@@ -265,12 +295,18 @@ class SplitPaneOverlay<T> implements Component {
   }
 
   dispose(): void {
+    if (this.spec.state) {
+      this.spec.state.selectedKey = this.selectedKey;
+      this.spec.state.detailOffset = this.detailOffset;
+      this.spec.state.detailAnchor = this.detailAnchor;
+      this.spec.state.detailFloor = this.detailFloor;
+    }
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
   }
 }
 
-/** Open the overlay in the editor slot, hiding the agent panel meanwhile. */
+/** Open the view, hiding the agent panel meanwhile. */
 export async function openOverlay<T>(
   ctx: Pick<ExtensionContext, "ui">,
   spec: OverlaySpec<T>,
@@ -278,16 +314,19 @@ export async function openOverlay<T>(
 ): Promise<void> {
   panel?.setSuppressed(true);
   try {
-    await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
-      const color: Colorize = (name, text) => theme.fg(name, text);
-      return new SplitPaneOverlay(
-        tui,
-        color,
-        (text) => theme.bold(text),
-        spec,
-        () => done(undefined),
-      );
-    });
+    await ctx.ui.custom<void>(
+      (tui, theme, _keybindings, done) => {
+        const color: Colorize = (name, text) => theme.fg(name, text);
+        return new SplitPaneOverlay(
+          tui,
+          color,
+          (text) => theme.bold(text),
+          spec,
+          () => done(undefined),
+        );
+      },
+      spec.fullscreen ? FULLSCREEN_OVERLAY : undefined,
+    );
   } finally {
     panel?.setSuppressed(false);
   }

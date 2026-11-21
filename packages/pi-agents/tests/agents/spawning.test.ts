@@ -163,6 +163,42 @@ function answerOf(delivery: GraphDelivery): string {
 }
 
 describe("spawning", () => {
+  test("child spawn calls reject configuration overrides at both argument levels", async () => {
+    const service = await open();
+    for (const [field, value] of Object.entries({
+      model: "override",
+      thinking: "high",
+      tools: ["read"],
+      skills: [],
+      spawn: true,
+    })) {
+      for (const nested of [false, true]) {
+        const name = `lead_${field}_${nested}`;
+        const args = nested
+          ? { agents: [{ job: "look", [field]: value }] }
+          : { agents: [{ job: "look" }], [field]: value };
+        await service.spawnGraph({
+          agents: [lead(`spawn ${JSON.stringify(args)}`, { name })],
+        });
+        await resultOf(service, name);
+        const failure = (await entries(service, name))
+          .flatMap((entry) => entry.model ?? [])
+          .find(
+            (message) =>
+              message.role === "toolResult" &&
+              message.toolName === "agent_spawn",
+          );
+        expect(failure?.role === "toolResult" && failure.isError).toBe(true);
+        expect(textOf(failure?.content)).toContain(
+          nested
+            ? "in an agent profile"
+            : `Move ${field} into an entry of agents`,
+        );
+      }
+    }
+    expect(spawnedGroups(service)).toEqual([]);
+  });
+
   test("an agent's answer before its agents' results doesn't end its job", async () => {
     const service = await open();
     const graph = await service.spawnGraph({
@@ -196,7 +232,7 @@ describe("spawning", () => {
     const middle = {
       name: "mid",
       job: spawnJob([leaf], true),
-      spawn: true,
+      profile: "spawner",
     };
     await service.spawnGraph({ agents: [lead(spawnJob([middle], true))] });
     const delivery = await resultOf(service, "lead");
@@ -206,8 +242,8 @@ describe("spawning", () => {
 
   test("agents at the deepest level can't spawn", async () => {
     const service = await open();
-    const deep = { name: "deep", job: "dig", spawn: true };
-    const middle = { name: "mid", job: spawnJob([deep]), spawn: true };
+    const deep = { name: "deep", job: "dig", profile: "spawner" };
+    const middle = { name: "mid", job: spawnJob([deep]), profile: "spawner" };
     await service.spawnGraph({ agents: [lead(spawnJob([middle]))] });
     await resultOf(service, "lead");
     expect(
@@ -277,7 +313,9 @@ describe("spawning", () => {
   test("a stop reaches agents below, also through groups that finished", async () => {
     const service = await open();
     await service.spawnGraph({
-      agents: [lead(spawnJob([{ name: "child", job: "look", spawn: true }]))],
+      agents: [
+        lead(spawnJob([{ name: "child", job: "look", profile: "spawner" }])),
+      ],
     });
     await resultOf(service, "lead");
     await service.send(
@@ -395,16 +433,14 @@ describe("spawning", () => {
     const service = await open();
     await service.spawnGraph({
       agents: [
-        lead(spawnJob([{ name: "a", job: "a", tools: ["bash"] }]), {
+        lead(spawnJob([{ name: "a", job: "a" }]), {
           tools: ["read"],
         }),
       ],
     });
     const delivery = await resultOf(service, "lead");
-    expect(answerOf(delivery)).toBe(
-      "final: Agent a asks for tools you don't have: bash. Your tools: read",
-    );
-    expect(spawnedGroups(service)).toEqual([]);
+    expect(answerOf(delivery)).toBe("final: [results] a answered:");
+    expect(service.get("lead.a")?.tools).toEqual(["read"]);
   });
 
   test("finishing a child does not replenish the lifetime spawn cap", async () => {

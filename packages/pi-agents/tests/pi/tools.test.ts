@@ -229,6 +229,12 @@ describe("tool exposure", () => {
         onError: (error) => errors.push(error),
       });
       expect(errors).toEqual([]);
+      expect(runtime.session.getActiveToolNames()).not.toContain("agent_wait");
+      expect(runtime.session.getCallableToolNames()).not.toContain(
+        "agent_spawn",
+      );
+      expect(runtime.session.systemPrompt).not.toContain("<agent_profiles>");
+      await runtime.session.prompt("/agents enable");
       expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
       const callable = runtime.session.getCallableToolNames();
       expect(callable).not.toContain("agent_wait");
@@ -239,16 +245,156 @@ describe("tool exposure", () => {
         "agent_stop",
       ])
         expect(callable).toContain(name);
+      const entries = () =>
+        runtime.session.sessionManager
+          .getEntries()
+          .filter(
+            (entry) =>
+              entry.type === "custom" &&
+              entry.customType === "pi-agents-enabled",
+          );
+      expect(entries()).toHaveLength(1);
+      await runtime.session.prompt("/agents enable");
+      expect(entries()).toHaveLength(1);
+      await runtime.session.reload();
+      expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
+      expect(entries()).toHaveLength(1);
+      await runtime.newSession();
+      await runtime.session.bindExtensions({ mode: "json" });
+      expect(runtime.session.getActiveToolNames()).not.toContain("agent_wait");
+      expect(runtime.session.getCallableToolNames()).not.toContain(
+        "agent_spawn",
+      );
     } finally {
       await runtime.dispose();
     }
   });
 
+  test("--agents enables new and continued sessions without duplicate markers", async () => {
+    for (const alreadyEnabled of [false, true]) {
+      const cwd = tempDir();
+      const sessionManager = SessionManager.inMemory(cwd);
+      sessionManager.appendCustomEntry("existing-session", {});
+      if (alreadyEnabled)
+        sessionManager.appendCustomEntry("pi-agents-enabled", {});
+      let flag = true;
+      const runtime = await createAgentSessionRuntime(
+        async ({ cwd, sessionManager, sessionStartEvent }) => {
+          const services = await createAgentSessionServices({
+            cwd,
+            agentDir: tempDir(),
+            settingsManager: SettingsManager.inMemory(),
+            extensionFlagValues: flag ? new Map([["agents", true]]) : undefined,
+            resourceLoaderOptions: {
+              noExtensions: true,
+              noSkills: true,
+              noPromptTemplates: true,
+              noThemes: true,
+              noContextFiles: true,
+              extensionFactories: [agentExtension],
+            },
+          });
+          return {
+            ...(await createAgentSessionFromServices({
+              services,
+              sessionManager,
+              sessionStartEvent,
+              noTools: "builtin",
+            })),
+            services,
+            diagnostics: services.diagnostics,
+          };
+        },
+        { cwd, sessionManager },
+      );
+      try {
+        const errors: unknown[] = [];
+        await runtime.session.bindExtensions({
+          mode: "json",
+          onError: (error) => errors.push(error),
+        });
+        const entries = () =>
+          runtime.session.sessionManager
+            .getEntries()
+            .filter(
+              (entry) =>
+                entry.type === "custom" &&
+                entry.customType === "pi-agents-enabled",
+            );
+        expect(runtime.diagnostics).toEqual([]);
+        expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
+        expect(runtime.session.getCallableToolNames()).toContain("agent_spawn");
+        expect(entries()).toHaveLength(1);
+        await runtime.session.reload();
+        expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
+        expect(entries()).toHaveLength(1);
+        await runtime.newSession();
+        await runtime.session.bindExtensions({ mode: "json" });
+        expect(runtime.session.getActiveToolNames()).toContain("agent_wait");
+        expect(entries()).toHaveLength(1);
+        flag = false;
+        await runtime.newSession();
+        await runtime.session.bindExtensions({ mode: "json" });
+        expect(runtime.session.getActiveToolNames()).not.toContain(
+          "agent_wait",
+        );
+        expect(entries()).toHaveLength(0);
+        expect(errors).toEqual([]);
+      } finally {
+        await runtime.dispose();
+      }
+    }
+  });
+
+  test("agent_spawn omits null and blank optional strings", () => {
+    const tool = tools().get("agent_spawn");
+    if (!tool) throw new Error("agent_spawn is not registered");
+    for (const empty of [null, "", " \t\n"]) {
+      const prepared = tool.prepareArguments?.({
+        name: empty,
+        agents: [
+          {
+            job: "review",
+            name: empty,
+            profile: empty,
+            cwd: empty,
+          },
+        ],
+      });
+      expect(prepared).toEqual({
+        agents: [{ job: "review" }],
+      });
+      expect(Value.Check(tool.parameters, prepared)).toBe(true);
+    }
+    const invalid = tool.prepareArguments?.({ agents: [{ job: null }] });
+    expect(Value.Check(tool.parameters, invalid)).toBe(false);
+  });
+
+  test("agent_spawn reserves configuration fields for profiles", () => {
+    const tool = tools().get("agent_spawn");
+    if (!tool) throw new Error("agent_spawn is not registered");
+    const fields = tool.parameters.properties.agents.items.properties;
+    for (const field of ["model", "thinking", "tools", "skills", "spawn"]) {
+      expect(fields).not.toHaveProperty(field);
+      expect(() =>
+        tool.prepareArguments?.({
+          agents: [{ job: "review" }],
+          [field]: "override",
+        }),
+      ).toThrow(`Move ${field} into an entry of agents`);
+      expect(() =>
+        tool.prepareArguments?.({
+          agents: [{ job: "review", [field]: "override" }],
+        }),
+      ).toThrow("in an agent profile");
+    }
+  });
+
   test("agent_spawn shows how to list a single agent's fields", () => {
     const prepare = tools().get("agent_spawn")?.prepareArguments;
-    const lead = { name: "lead", job: "review", spawn: true };
+    const lead = { name: "lead", job: "review" };
     expect(() => prepare?.(lead)).toThrow(
-      'Move job, spawn into an entry of agents. Arguments are always an agents array, also for a single agent: {"agents": [{"name": "lead"',
+      'Move job into an entry of agents. Arguments are always an agents array, also for a single agent: {"agents": [{"name": "lead"',
     );
     expect(prepare?.({ agents: [lead] })).toEqual({ agents: [lead] });
   });
@@ -643,14 +789,11 @@ describe("call results", () => {
   test("a spawn of one agent reads as that agent", async () => {
     const run = await gated();
     const spawn = tools().get("agent_spawn");
-    const args = { agents: [{ name: "scout", job: "Look.", spawn: true }] };
+    const args = { agents: [{ name: "scout", job: "Look." }] };
     const started = await run("agent_spawn", args);
     expect(started.text).toBe("Started scout.");
     // The call names the agent, which its result doesn't repeat.
-    expect(drawFrame(spawn, args, started)).toEqual([
-      "spawn scout spawn=true",
-      "  Look.",
-    ]);
+    expect(drawFrame(spawn, args, started)).toEqual(["spawn scout", "  Look."]);
     // Its result reads as its answer, without a graph.
     const waited = await run("agent_wait", { names: ["scout"] });
     expect(waited.text).toBe("scout answered:\n\ndone: Look.");
